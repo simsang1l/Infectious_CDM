@@ -1,5 +1,5 @@
 source_path: "F:\\01.감염병데이터베이스\\data\\2023_infectious_DW"
-CDM_path: "F:\\01.감염병데이터베이스\\data\\2023_infectious_CDM_코드수정후"
+CDM_path: "F:\\01.감염병데이터베이스\\data\\2024_infectious_CDM"
 encoding: "utf-8"
 source_dtype: "str"
 target_zip: "549"
