@@ -1,0 +1,210 @@
+source_path: "F:\\01.감염병데이터베이스\\data\\knuh\\emr"
+CDM_path: "F:\\01.감염병데이터베이스\\data\\knuh\\cdm"
+source_encoding: "cp949"
+cdm_encoding: "utf-8"
+source_dtype: "str"
+target_zip: "419"
+data_range: "2023-08-31"
+care_site_data: "care_site"
+person_data: "person"
+provider_data: "provider"
+visit_data: "visit_occurrence"
+visit_detail_data: "visit_detail"
+local_edi_data: "local_edi"
+person_source_value: "PID"
+location_data: "location"
+concept_unit: "concept_unit"
+hospital: "INSTCD"
+drug_edi_data: "drug_edi"
+sugacode: "CALCSCORCD"
+edicode: "INSUEDICD"
+fromdate: "FROMDD"
+todate: "TODD"
+
+care_site:
+  data:
+    source_data: "18.PMCMPTBS_부서코드마스터"
+    output_filename: "care_site"
+  columns:
+    care_site_name: "INORDDEPTNM"
+    place_of_service_concept_id: 0
+    care_site_source_value: "DEPTCD"
+    place_of_service_source_value: "INSTCD"
+    location_source_value: "LOCATION_SOURCE_VALUE"
+
+provider:
+  data:
+    source_data: "21.RPBMEMPL_사원정보마스터"
+    output_filename: "provider"
+  columns:
+    provider_name: "EMPLNO"
+    provider_source_value: "EMPLNO"
+    specialty_source_value: JOBKINDCD
+    gender_source_value: GNDR
+    care_site_source_value: DEPTCD
+
+person:
+  data:
+    source_data: "19.PMCMPTBS_환자기본정보"
+    output_filename: "person"
+  columns:
+    gender_source_value: "SEX"
+    death_datetime: "DETHDT"
+    birth_datetime: "BRTHDD"
+    race_source_value: "FORGERYN"
+    location_source_value: "ZIPCD1"
+
+visit_occurrence:
+  data:
+    source_data: "20.PMOHOTPT_외래환자예약"
+    source_data2: "16.PMIHINPT_환자입원이력"
+    output_filename: "visit_occurrence"
+  columns:
+    admitted_from_source_value: "INPATH"
+    discharge_to_source_value: "DSCHTYPE"
+    visit_source_value: "ORDTYPE"
+    meddate: "ORDDD"
+    medtime: "ORDTM"
+    admdate: "INDD"
+    admtime: "INTM"
+    dschdate: "DSCHDD"
+    dschtime: "DSCHTM"
+    meddept: "ORDDEPTCD"
+
+condition_occurrence:
+  data:
+    source_data: "12.MMOHDIAG_진단정보"
+    output_filename: "condition_occurrence"  
+  columns:
+    meddept: "ORDDEPTCD"
+    provider: "ORDDRID"
+    condition_start_datetime: "DIAGDD"
+    condition_type: null
+    condition_source_value: "DIAGCD"
+    condition_status_source_value: null
+    orddd: "ORDDD"
+
+drug_edi:
+  data:
+    order_data: "22.ADBMDRUG_약제마스터"
+    concept_data: "concept_EDI_KDC"
+    output_filename: "drug_edi"
+  columns:
+    ordercode: "DRUGCD"
+    edicode: "EDICD"
+    fromdate: "DRUGFROMDD"
+    todate: "DRUGTODD"
+
+drug_exposure:
+  data:
+    source_data: "08.MMOHIPRC_약처방정보"
+    output_filename: "drug_exposure"
+  columns:
+    drugcd: "DRUGCD"
+    fromdate: "DRUGFROMDD"
+    todate: "DRUGTODD"
+    edicode: "EDICD"
+    meddept: "ORDDEPTCD"
+    provider: "ORDDRID"
+    drug_exposure_start_datetime: "PRCPDD"
+    drug_source_value: "PRCPCD"
+    days_supply: "PRCPDAYNO"
+    qty: "PRCPQTY"
+    cnt: "PRCPTIMS"
+    route_source_value: "DRUGMTHDSPCCD"
+    dose_unit_source_value: "PRCPQTYUNITFLAG"
+    orddd: "ORDDD"
+
+local_edi:
+  data:
+    order_data: "23.LLFMTCLS_검체검사"
+    edi_data: "17.PICMMECH_수가마스터"
+    concept_data: "concept_EDI_KDC"
+    output_filename: "local_edi"
+  columns:
+    ordercode: "TCLSCD"
+    sugacode: "CALCSCORCD"
+    edicode: "INSUEDICD"
+    fromdate: "FROMDD"
+    todate: "TODD"
+    engnm: "ENGNM"
+    tclsnm: "TCLSNM"
+
+measurement_diag:
+  data:
+    source_data1: "02.MMOHIPRC_검사처방"
+    source_data2: "28.MMODEXIP_처방상세"
+    source_data3: "25.LLCHSBGD_진단검사접수"
+    source_data4: "11.LLRHSPDO_진단검사결과"
+    output_filename: "measurement_diag"
+  columns:
+    meddept: "ORDDEPTCD"
+    provider: "ORDDRID"
+    orddate: "PRCPDD"
+    measurement_date: "LASTREPTDT"
+    measurement_source_value: "TESTCD"
+    value_source_value: "INPTRSLT"
+    range_low: "REFL"
+    range_high: "REFH"
+
+measurement_pth:
+  data:
+    source_data1: "03.LPRMRSLT_병리검사결과"
+    source_data2: "27.LPRMCNTSD_병리검사결과"
+    source_data3: "26.LPJMACPT_병리접수"
+    source_data4: "02.MMOHIPRC_검사처방"
+    output_filename: "measurement_pth"
+  columns:
+    meddept: "ORDDEPTCD"
+    provider: "ORDDRID"
+    orddate: "PRCPDD"
+    measurement_date: "RSLTRGSTDD"
+    measurement_source_value: "TESTCD"
+    value_source_value: "RSLTCNTS1"
+    range_low: null
+    range_high: null
+    
+
+measurement_vs:
+  data:
+    source_data: "01.MNWMPGIF_간호정보조사(일반)"
+    output_filename: "measurement_bmi"
+  columns:
+    provider: "RECRID"
+    admtime: "INDD"
+    height: "BDHT"
+    weight: "BDWT"
+    sbp: "HIGHBP"
+    dbp: "LOWBP"
+    pulse: "PULSE"
+    breth: "BRETH"
+    bdtp: "BDTP"
+    spo2: "SPO2"
+
+merge_measurement:
+  data:
+    source_data1: "measurement_diag"
+    source_data2: "measurement_pth"
+    source_data3: "measurement_vs"
+    output_filename: "measurement"
+
+procedure:
+  data:
+    source_data1: "02.MMOHIPRC_검사처방"
+    source_data2: "28.MMODEXIP_처방상세"
+    source_data3: "09.MMOHIPRC_영상검사결과"
+    output_filename: "procedure_occurrence"
+  columns:
+    meddept: "ORDDEPTCD"
+    provider: "ORDDRID"
+    orddate: "PRCPDD"
+    procedure_source_value: "PRCPCD"
+
+observation_period:
+  data:
+    visit: "visit_occurrence"
+    condition: "condition_occurrence"
+    drug: "drug_exposure"
+    measurement: "measurement"
+    procedure: "procedure_occurrence"
+    output_filename: "observation_period"

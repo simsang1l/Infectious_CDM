@@ -1,0 +1,213 @@
+source_path: "F:\\01.감염병데이터베이스\\data\\2023_infectious_DW"
+CDM_path: "F:\\01.감염병데이터베이스\\data\\2024_infectious_CDM_withPolars"
+encoding: "utf-8"
+source_dtype: "str"
+target_zip: 549
+data_range: "2023-08-31"
+care_site_data: "care_site"
+person_data: "person"
+provider_data: "provider"
+visit_data: "visit_occurrence"
+visit_detail_data: "visit_detail"
+local_edi_data: "local_edi"
+person_source_value: "PATNO"
+location_data: "location"
+concept_unit: "concept_unit"
+
+care_site:
+  data:
+    source_data: "ods_ccdeptct"
+    output_filename: "care_site"
+  columns:
+    care_site_name: "DEPTLNM"
+    place_of_service_concept_id: 0
+    care_site_source_value: "DEPTCODE"
+    place_of_service_source_value: "SUBDEPT"
+    location_source_value: "LOCATION_SOURCE_VALUE"
+
+provider:
+  data:
+    source_data: "dd_csusermt"
+    output_filename: "provider"
+  columns:
+    provider_name: "EMPNO"
+    provider_source_value: "USERID"
+    specialty_source_value: JIKJONG
+    gender_source_value: null
+    care_site_source_value: DEPTCODE
+    npi: null
+    dea: null
+    year_of_birth: null
+
+person:
+  data:
+    source_data: "ods_appatbat"
+    output_filename: "person"
+  columns:
+    gender_source_value: "SEX"
+    death_datetime: "DIEDATE"
+    birth_resno1: "RESNO1"
+    birth_resno2: "RESNO2"
+    location_source_value: "ZIPCODE"
+
+visit_occurrence:
+  data:
+    source_data: "ods_apopdlst"
+    source_data2: "ods_apipdlst"
+    output_filename: "visit_occurrence"
+  columns:
+    admitted_from_source_value: "ADMPATH"
+    discharge_to_source_value: "DSCHRSLT"
+    visit_source_value: "PATFG"
+    medtime: "MEDTIME"
+    admtime: "ADMTIME"
+    dschtime: "DSCHTIME"
+    meddept: "MEDDEPT"
+    meddr: "MEDDR"
+    chadr: "CHADR"
+
+visit_detail:
+  data:
+   source_data: "ods_mnicupat"
+   output_filename: "visit_detail"
+  columns:
+    visit_detail_start_datetime: "ENTRTIME"
+    visit_detail_end_datetime: "OUTRMTIME"
+    visit_detail_source_value: "ICU"
+    admitted_from_source_value: "ENTRPATH"
+    discharge_to_source_value: "DSCHSTATE"
+    meddept: "MEDDEPT"
+    provider: "CHADR"
+ 
+condition_occurrence:
+  data:
+    source_data: "ods_mmpdiagt"
+    output_filename: "condition_occurrence"  
+  columns:
+    meddept: "MEDDEPT"
+    provider: "CHADR"
+    condition_start_datetime: "MEDTIME"
+    condition_type: MAINYN
+    condition_source_value: "DIAGCODE"
+    condition_status_source_value: IMPRESSYN
+    patfg: "PATFG"
+
+local_edi:
+  data:
+    order_data: "ods_mmordrct"
+    edi_data: "ods_aipricst"
+    concept_data: "concept_EDI_KDC"
+    output_filename: "local_edi"
+  columns:
+    ordercode: "ORDCODE"
+    sugacode: "SUGACODE"
+    edicode: "INSEDICODE"
+    fromdate: "FROMDATE"
+    todate: "TODATE"
+
+
+drug_exposure:
+  data:
+    source_data: "ods_mmmedort"
+    output_filename: "drug_exposure"
+  columns:
+    meddept: "MEDDEPT"
+    provider: "CHADR"
+    drug_exposure_start_datetime: "ORDDATE"
+    drug_source_value: "ORDCODE"
+    days_supply: "DAY"
+    qty: "CONTQTY"
+    cnt: "CNT"
+    dose_unit_source_value: "CONTUNIT"
+    medtime: "MEDTIME"
+    dcyn: "DCYN"
+    patfg: "PATFG"
+
+measurement_stresult:
+  data:
+    source_data1: "ods_mmexmort"
+    source_data2: "ods_stresult"
+    output_filename: "measurement_stresult"
+  columns:
+    meddept: "MEDDEPT"
+    provider: "ORDDR"
+    orddate: "ORDDATE"
+    exectime: "EXECTIME"
+    measurement_source_value: "examcode"
+    value_source_value: "rsltnum"
+    unit_source_value: "rsltunit"
+    range_low: "norlow"
+    range_high: "norhigh"
+    patfg: "PATFG"
+    medtime: "MEDTIME"
+    dcyn: "DCYN"
+    ordseqno: "ORDSEQNO"
+
+measurement_bmi:
+  data:
+    source_data: "ods_mnnisemt"
+    output_filename: "measurement_bmi"
+  columns:
+    meddept: "MEDDEPT"
+    provider: "REGID"
+    admtime: "ADMTIME"
+    height: "HEIGHT"
+    weight: "WEIGHT"
+
+merge_measurement:
+  data:
+    source_data1: "measurement_stresult"
+    source_data2: "measurement_bmi"
+    output_filename: "measurement"
+
+procedure_trt:
+  data:
+    source_data: "ods_mmtrtort"
+    output_filename: "procedure_occurrence_trt"
+  columns:
+    meddept: "MEDDEPT"
+    provider: "ORDDR"
+    orddate: "ORDDATE"
+    exectime: "EXECTIME"
+    opdate: "OPDATE"
+    procedure_source_value: "ORDCODE"
+    patfg: "PATFG"
+    medtime: "MEDTIME"
+    dcyn: "DCYN"
+    ordclstyp: "ORDCLSTYP"
+    ordseqno: "ORDSEQNO"
+
+procedure_stresult:
+  data:
+    source_data1: "ods_mmexmort"
+    source_data2: "ods_stresult"
+    output_filename: "procedure_stresult"
+  columns:
+    meddept: "MEDDEPT"
+    provider: "ORDDR"
+    orddate: "ORDDATE"
+    exectime: "EXECTIME"
+    procedure_source_value: "examcode"
+    value_source_value: "rsltnum"
+    unit_source_value: "rsltunit"
+    range_low: "norlow"
+    range_high: "norhigh"
+    patfg: "PATFG"
+    medtime: "MEDTIME"
+    dcyn: "DCYN"
+    ordseqno: "ORDSEQNO"
+
+merge_procedure:
+  data:
+    source_data1: "procedure_order_trt"
+    source_data2: "procedure_stresult"
+    output_filename: "procedure_occurrence"
+
+observation_period:
+  data:
+    visit: "visit_occurrence"
+    condition: "condition_occurrence"
+    drug: "drug_exposure"
+    measurement: "measurement"
+    procedure: "procedure_occurrence"
+    output_filename: "observation_period"

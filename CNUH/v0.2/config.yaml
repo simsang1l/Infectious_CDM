@@ -1,0 +1,158 @@
+source_path: "F:\\01.감염병데이터베이스\\data\\cnuh\\emr"
+CDM_path: "F:\\01.감염병데이터베이스\\data\\cnuh\\cdm"
+source_encoding: "cp949"
+cdm_encoding: "utf-8"
+source_dtype: "str"
+target_zip: "614"
+data_range: "2023-08-31"
+care_site_data: "care_site"
+person_data: "person"
+provider_data: "provider"
+visit_data: "visit_occurrence"
+visit_detail_data: "visit_detail"
+local_edi_data: "local_edi"
+person_source_value: "환자번호"
+location_data: "location"
+concept_unit: "concept_unit"
+visit_source_key: "원무접수ID"
+sugacode: "수가코드"
+ordercode: "처방코드"
+fromdate: "적용시작일자"
+todate: "적용종료일자"
+edicode: "보험EDI코드"
+hospital: "병원구분코드"
+
+
+care_site:
+  data:
+    source_data: "PDEDBMSM_부서기본"
+    output_filename: "care_site"
+  columns:
+    care_site_name: "부서명"
+    place_of_service_concept_id: 0
+    care_site_source_value: "부서코드"
+    place_of_service_source_value: "병원구분코드"
+    location_source_value: "LOCATION_SOURCE_VALUE"
+
+provider:
+  data:
+    source_data: "PDESMSAM_DAMO_사원정보마스터"
+    output_filename: "provider"
+  columns:
+    provider_name: "직원식별ID"
+    year_of_birth: "생일년월일"
+    provider_source_value: "직원번호"
+    specialty_source_value: 소속부서코드
+    gender_source_value: null
+    care_site_source_value: 소속부서코드
+
+person:
+  data:
+    source_data: "PCTPCPAM_DAMO_환자기본정보"
+    output_filename: "person"
+  columns:
+    gender_source_value: "성별구분코드"
+    death_datetime: "사망일시"
+    race_source_value: "암호화외국인ID번호"
+    birth_date: "환자생일일자"
+    location_source_value: "614"
+
+visit_occurrence:
+  data:
+    source_data: "ACPPRODM_환자별외래예약이력"
+    output_filename: "visit_occurrence"
+  columns:
+    admitted_from_source_value: null
+    discharge_to_source_value: null
+    visit_source_value: null
+    visit_start_datetime: "진료일자"
+    visit_end_datetime: "진료일자"
+    meddept: "진료부서코드"
+    provider: "진료의직원식별ID"
+
+visit_detail:
+  data:
+   source_data: "MOMNMIOD_중환자실환자정보"
+   output_filename: "visit_detail"
+  columns:
+    person_source_value: "등록번호"
+    visit_detail_start_datetime: "입실일시"
+    visit_detail_end_datetime: "퇴실일시"
+    admitted_from_source_value: null
+    discharge_to_source_value: null
+    visit_detail_source_value: "입실병동부서코드"
+    meddept: "진료부서코드"
+    admtime: "입원일자"
+
+condition_occurrence:
+  data:
+    source_data: "MOODIPAM_환자진단기본"
+    output_filename: "condition_occurrence"  
+  columns:
+    provider: "최초진단직원번호"
+    condition_start_datetime: "진단시작일자"
+    condition_end_datetime: "진단종료일자"
+    condition_source_value: "ICD10코드"
+    condition_status_source_value: null
+    visit_source_key: "진단ID"
+
+local_edi:
+  data:
+    order_data: "처방코드분류_전남대학교병원"
+    edi_data: "AIMIRPMC_수가코드"
+    concept_data: "concept_EDI_KDC"
+    output_filename: "local_edi"
+  columns:
+    
+    korname: "한글수가명"
+    engname: "영문수가명"
+
+
+drug_exposure:
+  data:
+    source_data: "MOOORDRM_약처방"
+    output_filename: "drug_exposure"
+  columns:
+    meddept: "발행처부서코드"
+    provider: "주치의직원번호"
+    drug_exposure_start_datetime: "처방일자"
+    drug_source_value: "처방코드"
+    days_supply: "전체기간일수"
+    qty: "기간별횟수"
+    cnt: "투여수량"
+    route_source_value: "투여경로구분코드"
+    dose_unit_source_value: "약품단위구분코드"
+
+measurement_diag:
+  data:
+    source_data: "MSELMAID_진단검사결과"
+    output_filename: "measurement"
+  columns:
+    provider: "검사시작직원번호"
+    orddate: "처방일자"
+    measurement_datetime: "최종결과검증일시"
+    measurement_source_value: "검사코드"
+    value_source_value: "검사결과내용"
+    unit_source_value: "검사결과단위"
+    range_low: null
+    range_high: null
+
+
+procedure:
+  data:
+    source_data: "MOOORPTD_처방기본"
+    output_filename: "procedure_occurrence"
+  columns:
+    provider: "주치의직원번호"
+    procedure_date: "처방일자"
+    procedure_source_value: "처방코드"
+    visit_source_key: "진료원무접수ID"
+
+observation_period:
+  data:
+    visit: "visit_occurrence"
+    condition: "condition_occurrence"
+    drug: "drug_exposure"
+    measurement: "measurement"
+    procedure: "procedure_occurrence"
+    output_filename: "observation_period"

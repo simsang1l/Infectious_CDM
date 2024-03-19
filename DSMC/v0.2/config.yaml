@@ -1,0 +1,147 @@
+source_path: "F:\\01.감염병데이터베이스\\data\\dsmc\\emr"
+CDM_path: "F:\\01.감염병데이터베이스\\data\\dsmc\\cdm"
+encoding: "utf-8"
+source_dtype: "str"
+target_zip: "426"
+data_range: "2023-08-31"
+care_site_data: "care_site"
+person_data: "person"
+provider_data: "provider"
+visit_data: "visit_occurrence"
+visit_detail_data: "visit_detail"
+local_edi_data: "local_edi"
+person_source_value: "환자번호"
+location_data: "location"
+concept_unit: "concept_unit"
+visit_source_key: "수진번호"
+ordcode: "처방코드"
+edicode: "EDI 코드"
+fromdate: "적용시작일"
+todate: "적용종료일"
+hospital: "병원구분"
+
+
+care_site:
+  data:
+    source_data: "care_site"
+    output_filename: "care_site"
+  columns:
+    care_site_name: "병원구분"
+    place_of_service_concept_id: 0
+    care_site_source_value: "부서코드"
+    place_of_service_source_value: "병원구분"
+    location_source_value: "LOCATION_SOURCE_VALUE"
+
+provider:
+  data:
+    source_data: "provider"
+    output_filename: "provider"
+  columns:
+    provider_name: null
+    year_of_birth: "의료제공자 출생년도"
+    provider_source_value: "의료제공자 식별ID"
+    specialty_source_value: "의료제공자 전문분야"
+    gender_source_value: "의료제공자 성별"
+    care_site_source_value: null
+
+person:
+  data:
+    source_data: "person"
+    output_filename: "person"
+    death_data: "death"
+  columns:
+    race_source_value: "외국인구분"
+    gender_source_value: "성별"
+    death_datetime: "사망일시"
+    birth_date: "생년월일"
+    location_source_value: "우편번호"
+
+visit_occurrence:
+  data:
+    source_data: "visit_occurrence"
+    output_filename: "visit_occurrence"
+  columns:
+    admitted_from_source_value: "입원경로"
+    discharge_to_source_value: "퇴원형태"
+    visit_source_value: "방문유형"
+    visit_start_datetime: "내원시작일시"
+    visit_end_datetime: "내원종료일시"
+
+visit_detail:
+  data:
+   source_data: "visit_detail"
+   output_filename: "visit_detail"
+  columns:
+    visit_detail_start_datetime: "ICU입실일자"
+    visit_detail_end_datetime: "ICU퇴실일자"
+    visit_detail_source_value: "병동코드"
+    admitted_from_source_value: null
+    discharge_to_source_value: null
+ 
+condition_occurrence:
+  data:
+    source_data: "condition_occurrence"
+    output_filename: "condition_occurrence"  
+  columns:
+    condition_start_datetime: "진단일"
+    condition_type: 주상병여부
+    condition_source_value: "진단코드"
+    condition_status_source_value: 확정상병여부
+    visit_source_key: "수진번호"
+
+local_edi:
+  data:
+    order_data: "계명대병원_처방코드마스터_20231117"
+    concept_data: "concept_EDI_KDC"
+    output_filename: "local_edi"
+  columns:
+    ordercode: "처방코드"
+    edicode: "EDI 코드"
+    fromdate: "적용시작일"
+    todate: "적용종료일"
+
+
+drug_exposure:
+  data:
+    source_data: "drug_exposure"
+    output_filename: "drug_exposure"
+  columns:
+    drug_exposure_start_datetime: "약처방일"
+    drug_source_value: "약처방코드"
+    days_supply: "처방일수"
+    qty: "처방량"
+    cnt: "처방횟수"
+    route_source_value: "약물투여경로코드"
+    dose_unit_source_value: "처방단위"
+
+
+measurement:
+  data:
+    source_data: "measurement"
+    output_filename: "measurement"
+  columns:
+    measurement_date: "검사일시"
+    measurement_source_value: "검사코드"
+    value_source_value: "검사결과"
+    unit_source_value: "검사단위"
+    result_range: "검사결과 참고치"
+
+
+procedure:
+  data:
+    source_data: "procedure_occurrence"
+    output_filename: "procedure_occurrence"
+  columns:
+    procedure_date: "시술/처치일"
+    procedure_source_value: "시술/처치 처방코드"
+    orddate: "처방일"
+
+
+observation_period:
+  data:
+    visit: "visit_occurrence"
+    condition: "condition_occurrence"
+    drug: "drug_exposure"
+    measurement: "measurement"
+    procedure: "procedure_occurrence"
+    output_filename: "observation_period"

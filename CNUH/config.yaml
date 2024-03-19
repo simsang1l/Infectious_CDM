@@ -1,0 +1,148 @@
+source_path: F:\\01.감염병데이터베이스\\data\\cnuh\\emr
+CDM_path: F:\\01.감염병데이터베이스\\data\\cnuh\\cdm
+source_encoding: utf8
+cdm_encoding: utf8
+source_dtype: str
+target_zip: "614"
+data_range: "2023-08-31"
+care_site_data: care_site
+person_data: person
+provider_data: provider
+visit_data: visit_occurrence
+visit_detail_data: visit_detail
+local_edi_data: local_edi
+person_source_value: PT_NO
+location_data: location
+concept_unit: concept_unit
+visit_source_key: PACT_ID
+sugacode: "수가코드"
+ordercode: "처방코드"
+fromdate: "적용시작일자"
+todate: "적용종료일자"
+edicode: INS_EDI_CD
+hospital: HSP_TP_CD
+
+
+care_site:
+  data:
+    source_data: lt_cre_dept
+    output_filename: care_site
+  columns:
+    care_site_name: "DEPT_NM"
+    place_of_service_concept_id: 0
+    care_site_source_value: "DEPT_CD"
+    place_of_service_source_value: NULL
+    location_source_value: "LOCATION_SOURCE_VALUE"
+
+provider:
+  data:
+    source_data: lt_cre_usr
+    output_filename: provider
+  columns:
+    provider_name: NULL
+    year_of_birth: NULL
+    provider_source_value: STF_NO
+    specialty_source_value: AOA_WKDP_CD
+    gender_source_value: NULL
+    care_site_source_value: AOA_WKDP_CD
+
+person:
+  data:
+    source_data: lt_cre_pt
+    source_data_visit: ft_cre_vist
+    output_filename: person
+  columns:
+    gender_source_value: SEX_TP_CD
+    death_datetime: NULL
+    race_source_value: DTH_DTM
+    birth_date: PT_BRDY_DT
+    location_source_value: "614"
+
+visit_occurrence:
+  data:
+    source_data: ft_cre_vist
+    output_filename: visit_occurrence
+  columns:
+    admitted_from_source_value: NULL
+    discharge_to_source_value: NULL
+    visit_source_value: PACT_TP_NM
+    visit_start_datetime: MED_DT
+    admission_end_datetime: DS_DT
+    emergency_end_datetime: EMRM_CHOT_DTM
+    meddept: MED_DEPT_CD
+    provider: DR_STF_NO
+
+
+condition_occurrence:
+  data:
+    source_data: ft_cre_dgns
+    output_filename: condition_occurrence
+  columns:
+    provider: DGNS_STF_NO
+    condition_start_datetime: DGNS_STR_DT
+    condition_source_value: ICD10_CD
+    condition_status_source_value: DTMN_SKNS_YN
+    meddept: MED_DEPT_CD 
+    pact_tp_nm: MED_PACT_TP_NM
+
+local_edi:
+  data:
+    order_data: "처방코드분류_전남대학교병원"
+    edi_data: "AIMIRPMC_수가코드"
+    concept_data: "concept_EDI_KDC"
+    output_filename: "local_edi"
+  columns:
+    
+    korname: "한글수가명"
+    engname: "영문수가명"
+
+
+drug_exposure:
+  data:
+    source_data: ft_cre_mdpr
+    output_filename: drug_exposure
+  columns:
+    drug_exposure_start_datetime: ORD_DT
+    provider: FSR_STF_NO
+    days_supply: PRSC_DAYS
+    qty: AMD_QTY
+    cnt: PRPD_NOTM
+    drug_source_value: MDPR_CD
+    route_source_value: DTL_AMPTH_CLS_CD
+    dose_unit_source_value: MDPR_UNIT_TP_CD
+
+measurement_diag:
+  data:
+    source_data: ft_cre_exm_spcm
+    output_filename: measurement
+  columns:
+    orddate: ORD_DT
+    measurement_datetime: ACPT_DTM
+    value_as_number: NUMB_EXRS_CNTE
+    value_as_concept: NEPO_EXRS_CNTE
+    provider: ORD_STF_NO
+    measurement_source_value: EXM_CD
+    unit_source_value: NULL
+    value_source_value: EXRS_CNTE
+    range_low: NULL
+    range_high: NULL
+
+
+procedure:
+  data:
+    source_data: "ft_cre_trtm_fee"
+    output_filename: "procedure_occurrence"
+  columns:
+    provider: NULL
+    procedure_date: ORD_DT
+    procedure_source_value: ORD_CD
+    
+
+observation_period:
+  data:
+    visit: "visit_occurrence"
+    condition: "condition_occurrence"
+    drug: "drug_exposure"
+    measurement: "measurement"
+    procedure: "procedure_occurrence"
+    output_filename: "observation_period"
