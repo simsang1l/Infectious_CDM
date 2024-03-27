@@ -1,5 +1,5 @@
-source_path: "F:\\01.감염병데이터베이스\\data\\2023_infectious_DW"
-CDM_path: "F:\\01.감염병데이터베이스\\data\\2024_infectious_CDM"
+source_path: "F:/01.감염병데이터베이스/data/2024_infectious_DW"
+CDM_path: "F:/01.감염병데이터베이스/data/2024_infectious_CDM"
 encoding: "utf-8"
 source_dtype: "str"
 target_zip: "549"
@@ -13,6 +13,7 @@ local_edi_data: "local_edi"
 person_source_value: "PATNO"
 location_data: "location"
 concept_unit: "concept_unit"
+concept_etc: "concept_etc"
 
 care_site:
   data:
@@ -30,9 +31,10 @@ provider:
     source_data: "dd_csusermt"
     output_filename: "provider"
   columns:
-    provider_name: "EMPNO"
+    provider_name: "USERNAME"
     provider_source_value: "USERID"
     specialty_source_value: JIKJONG
+    specialty_source_value_name: "JIKJONGNM"
     gender_source_value: null
     care_site_source_value: DEPTCODE
 
@@ -45,6 +47,7 @@ person:
     death_datetime: "DIEDATE"
     birth_resno1: "RESNO1"
     birth_resno2: "RESNO2"
+    person_name: "PATNAME"
     location_source_value: "ZIPCODE"
 
 visit_occurrence:
@@ -120,11 +123,10 @@ drug_exposure:
     dcyn: "DCYN"
     patfg: "PATFG"
 
-measurement_stresult:
+measurement_stexmrst:
   data:
-    source_data1: "ods_mmexmort"
-    source_data2: "ods_stresult"
-    output_filename: "measurement_stresult"
+    source_data: "ods_mmexmort"
+    output_filename: "measurement_stexmrst"
   columns:
     meddept: "MEDDEPT"
     provider: "ORDDR"

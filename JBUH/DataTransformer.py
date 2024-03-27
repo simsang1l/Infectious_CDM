@@ -39,6 +39,7 @@ class DataTransformer:
         self.target_zip = self.config["target_zip"]
         self.location_data = self.config["location_data"]
         self.concept_unit = self.config["concept_unit"]
+        self.concept_etc = self.config["concept_etc"]
         self.memory_usage = str(ps.memory_info().rss / (1024**3)) + "GB"
 
     def load_config(self, config_path):
@@ -198,6 +199,7 @@ class ProviderTransformer(DataTransformer):
         self.provider_name = self.cdm_config["columns"]["provider_name"]
         self.gender_source_value = self.cdm_config["columns"]["gender_source_value"]
         self.provider_source_value = self.cdm_config["columns"]["provider_source_value"]
+        self.specialty_source_value_name = self.cdm_config["columns"]["specialty_source_value_name"]
 
     def transform(self):
         """
@@ -222,6 +224,7 @@ class ProviderTransformer(DataTransformer):
         try :
             source_data = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype, encoding = self.encoding)
             care_site = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
             logging.debug(f"원천 데이터 row수: {len(source_data)}, {self.memory_usage}")
 
             source = pd.merge(source_data,
@@ -229,8 +232,20 @@ class ProviderTransformer(DataTransformer):
                             left_on = self.care_site_source_value,
                             right_on = "care_site_source_value",
                             how = "left")
-            
-            logging.debug(f"CDM 결합 후 원천 데이터 row수: {len(source_data)}, {self.memory_usage}")
+            logging.debug(f"care_site와 결합 후 원천 데이터 row수: {len(source_data)}, {self.memory_usage}")
+
+            specialty_conditions = [
+            source[self.specialty_source_value].isin(['500', '916', '912']),
+            source[self.specialty_source_value].isin(['010', '020', '100', '110', '120'
+                                    , '121', '122', '130', '133', '140'
+                                    , '150', '160', '170', '180', '200'])
+            ]
+            specialty_concept_id = [32581, 32577]
+            concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)
+
+            source["specialty_concept_id"] = np.select(specialty_conditions, specialty_concept_id, default = 0)
+            source = pd.merge(source, concept_etc, left_on = "specialty_concept_id", right_on="concept_id", how="left")
+            logging.debug(f"concept_etc와 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
         
             return source
 
@@ -243,30 +258,20 @@ class ProviderTransformer(DataTransformer):
         변환된 데이터는 새로운 DataFrame으로 구성됩니다.
         """
         try : 
-            specialty_conditions = [
-            source_data[self.specialty_source_value].isin(['500', '916', '912']),
-            source_data[self.specialty_source_value].isin(['010', '020', '100', '110', '120'
-                                    , '121', '122', '130', '133', '140'
-                                    , '150', '160', '170', '180', '200'])
-            ]
-            specialty_concept_id = [32581, 32577]
-
-            #     source[gender_source_value].isin(['M']),
-            #     source[gender_source_value].isin(['F'])
-            # ]
-            # gender_concept_id = [8507, 8532]  
-
             cdm = pd.DataFrame({
                 "provider_id" : source_data.index + 1,
                 "provider_name": source_data[self.provider_name],
                 "npi": None,
                 "dea": None,
-                "specialty_concept_id": np.select(specialty_conditions, specialty_concept_id, default = 0),
+                "specialty_concept_id": source_data["specialty_concept_id"],
+                "specialty_concept_id_name": source_data["concept_name"],
                 "care_site_id": source_data["care_site_id"],
+                "care_site_name": source_data["care_site_name"],
                 "year_of_birth": None,
                 "gender_concept_id": 0, #np.select(gender_conditions, gender_concept_id, default = 0),
                 "provider_source_value": source_data[self.provider_source_value],
                 "specialty_source_value": source_data[self.specialty_source_value],
+                "specialty_source_value_name": source_data[self.specialty_source_value_name],
                 "specialty_source_concept_id": 0,
                 "gender_source_value": self.gender_source_value, #np.select([source[gender_source_value].isna()], None, default = None),
                 "gender_source_concept_id": 0, #np.select(gender_conditions, gender_concept_id, default = 0),
@@ -296,6 +301,7 @@ class PersonTransformer(DataTransformer):
         self.death_datetime = self.cdm_config["columns"]["death_datetime"]
         self.birth_resno1 = self.cdm_config["columns"]["birth_resno1"]
         self.birth_resno2 = self.cdm_config["columns"]["birth_resno2"]
+        self.person_name = self.cdm_config["columns"]["person_name"]
 
     def transform(self):
         """
@@ -349,15 +355,17 @@ class PersonTransformer(DataTransformer):
         try : 
             race_conditions = [
             source[self.birth_resno2].str[:1].isin(['0', '1', '2', '3', '4', '9']),
-            source[self.birth_resno2].str[:1].isin(['5', '6', '7', '8'])
+            source[self.birth_resno2].str[:1].isin(['5', '6', '7', '8']),
+            source[self.birth_resno2].isnull()
             ]
-            race_concept_id = [38003585, 8552]
+            race_concept_id = [38003585, 8552, None]
 
             gender_conditions = [
                 source[self.gender_source_value].isin(['M']),
-                source[self.gender_source_value].isin(['F'])
+                source[self.gender_source_value].isin(['F']),
+                source[self.gender_source_value].isnull(),
             ]
-            gender_concept_id = [8507, 8532]
+            gender_concept_id = [8507, 8532, None]
 
             cdm = pd.DataFrame({
                 "person_id" : source.index + 1,
@@ -368,17 +376,18 @@ class PersonTransformer(DataTransformer):
                 "birth_datetime": pd.to_datetime(source[self.birth_resno1], format = "%Y%m%d", errors='coerce'),
                 "death_datetime": pd.to_datetime(source[self.death_datetime], format = "%Y%m%d", errors='coerce'),
                 "race_concept_id": np.select(race_conditions, race_concept_id, default = 0),
-                "ethnicity_concept_id": 0,
+                "ethnicity_concept_id": None,
                 "location_id": source["LOCATION_ID"],
                 "provider_id": 0,
                 "care_site_id": 0, 
                 "person_source_value": source[self.person_source_value],
+                "person_name": source[self.person_name],
                 "gender_source_value": source[self.gender_source_value],
                 "gender_source_concept_id": np.select(gender_conditions, gender_concept_id, default = 0),
                 "race_source_value": source[self.birth_resno1].str[:1],
-                "race_source_concept_id": 0,
+                "race_source_concept_id": None,
                 "ethnicity_source_value": None,
-                "ethnicity_source_concept_id": 0
+                "ethnicity_source_concept_id": None
                 })
             
             cdm["birth_datetime"] = cdm["birth_datetime"].dt.strftime('%Y-%m-%d %H:%M:%S')
