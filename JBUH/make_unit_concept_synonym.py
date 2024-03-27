@@ -67,10 +67,65 @@ unit_concept_synonym = [
     [9014, "ug/g creat"],
     [8748, "μg/L"],
     [8748, "ug/ℓ"],
-    [9448, "세"]
+    [9448, "세"],
+    [8848, "x10³/㎕"],
+    [9550, "mIU/mL"],
+    [9550, "mIU/ml"],
+    [9093, "uIU/mL"],
+    [8862, "mOsm/Kg"],
+    [8860, "uU/mL"],
+    [8860, "uU/ml"],
+    [9093, "uIU/ml"],
+    [8510, "U"],
+    [8510, "Units"],
+    [8510, "Unit"],
+    [8909, "mg/day"],
+    [8784, "cells/㎕"],
+    [8910, "mmol/day"],
+    [720842, "x10^6/Kg"],
+    [8906, "ug/day"],
+    [9384, "점"],
+    [8875, "uEq/L"],
+    [9557, "mEq/L"]
 ]
 
 config = load_config("./config.yaml")
 
+# unit_concept_id 불러오기
 df = pd.DataFrame(unit_concept_synonym, columns = ["concept_id", "concept_synonym_name"])
+unit_concept = pd.read_csv(os.path.join(config["CDM_path"], "concept_unit.csv"))
+unit_concept = unit_concept[unit_concept["vocabulary_id"]=="UCUM"]
+measurement = pd.read_csv(os.path.join(config["CDM_path"], "measurement.csv"))
+concept_synonym = pd.read_csv(os.path.join(config["CDM_path"], "unit_concept_synonym.csv"))
+
+### concept_synonym 만들기 ##
+concept_synonym = pd.merge(df, unit_concept, left_on="concept_id", right_on="concept_id", how="inner")
+concept_synonym = concept_synonym[["concept_id", "concept_name", "concept_synonym_name"]]
 df.to_csv(os.path.join(config["CDM_path"],"concept_synonym.csv"), index = False)
+
+
+### 전북대병원 unit 매핑 리스트 구하기 ###
+# 원본 unit과 concept_synonym과 매핑
+measurement = measurement[["unit_concept_id", "unit_source_value"]].drop_duplicates()
+df = pd.merge(measurement, concept_synonym, left_on="unit_source_value", right_on="concept_synonym_name", how = "left")
+# 중복되는 데이터 제거
+df = df[["unit_concept_id", "unit_source_value", "concept_id", "concept_name"]].drop_duplicates()
+# unit_concept_id먼저 매핑 후 concept_id 매핑하여 리스트 만들기
+df["unit_concept_id"] = df["unit_concept_id"].combine_first(df["concept_id"])
+df = df[["unit_concept_id", "concept_name", "unit_source_value"]]
+# csv 파일 만들기 
+df.to_csv("./unit_concept_id_list.csv", index = False)
+
+
+### 매핑률 변화 구하기 ###
+measurement_map_rate = len(measurement[measurement["unit_concept_id"].notnull()]) / len(measurement)
+unit_map_rate =  len(df[df["unit_concept_id"].notnull()]) / len(df)
+
+map_rate = {
+    "concept_synonym 적용 전 매핑된 코드 수": [len(measurement[measurement["unit_concept_id"].notnull()])],
+    "concept_synonym 적용 후 매핑된 코드 수": [len(df[df["unit_concept_id"].notnull()])],
+    "전체 코드 수": [len(df)],
+    "concept_synonym 적용 전 매핑률": [measurement_map_rate],
+    "concept_synonym 적용 후 매핑률": [unit_map_rate]
+            }
+pd.DataFrame(map_rate).to_csv("unit_map_rate.csv", index=False)
