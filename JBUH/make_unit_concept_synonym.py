@@ -95,16 +95,16 @@ config = load_config("./config.yaml")
 df = pd.DataFrame(unit_concept_synonym, columns = ["concept_id", "concept_synonym_name"])
 unit_concept = pd.read_csv(os.path.join(config["CDM_path"], "concept_unit.csv"))
 unit_concept = unit_concept[unit_concept["vocabulary_id"]=="UCUM"]
-measurement = pd.read_csv(os.path.join(config["CDM_path"], "measurement.csv"))
-concept_synonym = pd.read_csv(os.path.join(config["CDM_path"], "unit_concept_synonym.csv"))
 
 ### concept_synonym 만들기 ##
 concept_synonym = pd.merge(df, unit_concept, left_on="concept_id", right_on="concept_id", how="inner")
 concept_synonym = concept_synonym[["concept_id", "concept_name", "concept_synonym_name"]]
-df.to_csv(os.path.join(config["CDM_path"],"concept_synonym.csv"), index = False)
+concept_synonym.to_csv(os.path.join(config["CDM_path"],"unit_concept_synonym.csv"), index = False)
 
-
+"""
 ### 전북대병원 unit 매핑 리스트 구하기 ###
+measurement = pd.read_csv(os.path.join(config["CDM_path"], "measurement.csv"))
+concept_synonym = pd.read_csv(os.path.join(config["CDM_path"], "unit_concept_synonym.csv"))
 # 원본 unit과 concept_synonym과 매핑
 measurement = measurement[["unit_concept_id", "unit_source_value"]].drop_duplicates()
 df = pd.merge(measurement, concept_synonym, left_on="unit_source_value", right_on="concept_synonym_name", how = "left")
@@ -129,3 +129,4 @@ map_rate = {
     "concept_synonym 적용 후 매핑률": [unit_map_rate]
             }
 pd.DataFrame(map_rate).to_csv("unit_map_rate.csv", index=False)
+"""

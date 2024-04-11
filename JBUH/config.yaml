@@ -3,7 +3,7 @@ CDM_path: "F:/01.감염병데이터베이스/data/2024_infectious_CDM"
 encoding: "utf-8"
 source_dtype: "str"
 target_zip: "549"
-data_range: "2023-08-31"
+data_range: "2023-12-31"
 care_site_data: "care_site"
 person_data: "person"
 provider_data: "provider"
@@ -14,6 +14,7 @@ person_source_value: "PATNO"
 location_data: "location"
 concept_unit: "concept_unit"
 concept_etc: "concept_etc"
+unit_concept_synonym: "unit_concept_synonym"
 
 care_site:
   data:
@@ -49,6 +50,8 @@ person:
     birth_resno2: "RESNO2"
     person_name: "PATNAME"
     location_source_value: "ZIPCODE"
+    abotyp: ABOTYP
+    rhtyp: RHTYP
 
 visit_occurrence:
   data:
@@ -81,7 +84,7 @@ visit_detail:
  
 condition_occurrence:
   data:
-    source_data: "ods_mmpdiagt"
+    source_data: "dw_mmpdiagt"
     output_filename: "condition_occurrence"  
   columns:
     meddept: "MEDDEPT"
@@ -89,14 +92,18 @@ condition_occurrence:
     condition_start_datetime: "MEDTIME"
     condition_type: MAINYN
     condition_source_value: "DIAGCODE"
+    condition_source_value_name: "DIAGNAME"
     condition_status_source_value: IMPRESSYN
     patfg: "PATFG"
+    diagfg: "DIAGFG"
+
 
 local_edi:
   data:
     order_data: "ods_mmordrct"
     edi_data: "ods_aipricst"
     concept_data: "concept_EDI_KDC"
+    atc_data: "edi_atc"
     output_filename: "local_edi"
   columns:
     ordercode: "ORDCODE"
@@ -104,11 +111,16 @@ local_edi:
     edicode: "INSEDICODE"
     fromdate: "FROMDATE"
     todate: "TODATE"
+    standard_code: "표준코드"
+    atccode: "ATC코드"
+    atcname: "ATC 코드명"
+    edi_fromdate: "품목허가일자"
+    edi_todate: "취소일자"
 
 
 drug_exposure:
   data:
-    source_data: "ods_mmmedort"
+    source_data: "dw_mmcuhort_med"
     output_filename: "drug_exposure"
   columns:
     meddept: "MEDDEPT"
@@ -122,36 +134,33 @@ drug_exposure:
     medtime: "MEDTIME"
     dcyn: "DCYN"
     patfg: "PATFG"
+    drug_source_value_name: "ORDNAME"
+    methodcd: "METHODCD"
+    age: "AGE"
+    ordseqno: "ORDSEQNO"
+
 
 measurement_stexmrst:
   data:
-    source_data: "ods_mmexmort"
+    source_data: "dw_stexmrst"
     output_filename: "measurement_stexmrst"
   columns:
     meddept: "MEDDEPT"
     provider: "ORDDR"
     orddate: "ORDDATE"
-    exectime: "EXECTIME"
-    measurement_source_value: "examcode"
-    value_source_value: "rsltnum"
-    unit_source_value: "rsltunit"
-    range_low: "norlow"
-    range_high: "norhigh"
+    exectime: "EXECDT"
+    measurement_source_value: "EXAMCODE"
+    value_source_value: "RSLTNUM"
+    unit_source_value: "RSLTUNIT"
+    range_low: "NORLOW"
+    range_high: "NORHIGH"
     patfg: "PATFG"
     medtime: "MEDTIME"
-    dcyn: "DCYN"
     ordseqno: "ORDSEQNO"
-
-measurement_bmi:
-  data:
-    source_data: "ods_mnnisemt"
-    output_filename: "measurement_bmi"
-  columns:
-    meddept: "MEDDEPT"
-    provider: "REGID"
-    admtime: "ADMTIME"
-    height: "HEIGHT"
-    weight: "WEIGHT"
+    age: "AGE"
+    처방코드: "ORDCODE"
+    처방명: "ORDNAME"
+    결과내역: RSLTTEXT
 
 
 measurement_vs:
@@ -159,30 +168,30 @@ measurement_vs:
     source_data: "dv_basexm"
     output_filename: "measurement_vs"
   columns:
-    admtime: "admtime"
-    measurement_datetime: "rectime"
-    meddept: "meddept"
-    patfg: "patfg"
-    height: "ht"
-    weight: "wt"
-    bmi: "bmi"
-    sbp: "sbp"
-    dbp: "dbp"
-    pr: "pr"
-    rr: "rr"
-    bt: "bt"
-    spo2: "spo2"
+    admtime: "ADMTIME"
+    measurement_datetime: "RECTIME"
+    meddept: "MEDDEPT"
+    patfg: "PATFG"
+    height: "HT"
+    weight: "WT"
+    bmi: "BMI"
+    sbp: "SBP"
+    dbp: "DBP"
+    pr: "PR"
+    rr: "RR"
+    bt: "BT"
+    spo2: "SPO2"
 
 merge_measurement:
   data:
-    source_data1: "measurement_stresult"
+    source_data1: "measurement_stexmrst"
     source_data2: "measurement_vs"
     output_filename: "measurement"
 
-procedure_trt:
+procedure_order:
   data:
-    source_data: "ods_mmtrtort"
-    output_filename: "procedure_occurrence_trt"
+    source_data: "dw_mmcuhort_etc"
+    output_filename: "procedure_occurrence_order"
   columns:
     meddept: "MEDDEPT"
     provider: "ORDDR"
@@ -190,36 +199,41 @@ procedure_trt:
     exectime: "EXECTIME"
     opdate: "OPDATE"
     procedure_source_value: "ORDCODE"
+    procedure_source_value_name: "ORDNAME"
     patfg: "PATFG"
     medtime: "MEDTIME"
     dcyn: "DCYN"
     ordclstyp: "ORDCLSTYP"
     ordseqno: "ORDSEQNO"
+    age: "AGE"
 
-procedure_stresult:
+procedure_stexmrst:
   data:
-    source_data1: "ods_mmexmort"
-    source_data2: "ods_stresult"
-    output_filename: "procedure_stresult"
+    source_data: "dw_stexmrst"
+    output_filename: "procedure_stexmrst"
   columns:
     meddept: "MEDDEPT"
     provider: "ORDDR"
     orddate: "ORDDATE"
     exectime: "EXECTIME"
-    procedure_source_value: "examcode"
-    value_source_value: "rsltnum"
-    unit_source_value: "rsltunit"
-    range_low: "norlow"
-    range_high: "norhigh"
+    procedure_source_value: "EXAMCODE"
+    value_source_value: "RSLTNUM"
+    unit_source_value: "RSLTUNIT"
+    range_low: "NORLOW"
+    range_high: "NORHIGH"
     patfg: "PATFG"
     medtime: "MEDTIME"
-    dcyn: "DCYN"
     ordseqno: "ORDSEQNO"
+    age: "AGE"
+    rslttext: "RSLTTEXT"
+    conclusion: "CONCLUSION"
+    ordcode: "ORDCODE"
+    ordname: "ORDNAME"
 
 merge_procedure:
   data:
-    source_data1: "procedure_order_trt"
-    source_data2: "procedure_stresult"
+    source_data1: "procedure_occurrence_order"
+    source_data2: "procedure_stexmrst"
     output_filename: "procedure_occurrence"
 
 observation_period:

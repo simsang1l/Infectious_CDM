@@ -30,19 +30,19 @@ if __name__ == "__main__":
         drug_exposure = DrugexposureTransformer(config)    
         drug_exposure.transform()
 
-        measurement_stresult = MeasurementStresultTransformer(config)
+        measurement_stresult = MeasurementStexmrstTransformer(config)
         measurement_stresult.transform()
 
         measurement_bmi = MeasurementVSTransformer(config)
         measurement_bmi.transform()
 
         merge_measurement = MergeMeasurementTransformer(config)
-        merge_measurement.transform()
+        merge_measurement.transform()                      
 
-        procedure_trt = ProcedureTRTTransformer(config)
+        procedure_trt = ProcedureOrderTransformer(config)
         procedure_trt.transform()
 
-        procedure_stresult = ProcedureStresultTransformer(config)
+        procedure_stresult = ProcedureStexmrstTransformer(config)
         procedure_stresult.transform()
         
         merge_procedure = MergeProcedureTransformer(config)
