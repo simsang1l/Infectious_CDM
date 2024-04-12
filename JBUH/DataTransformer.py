@@ -1314,14 +1314,13 @@ class MeasurementStexmrstTransformer(DataTransformer):
             unit_concept_synonym = self.read_csv(self.unit_concept_synonym, path_type = self.cdm_flag , dtype = self.source_dtype)
             logging.debug(f'원천 데이터 row수: {len(source)}, {self.memory_usage}')
 
-            # visit_source_key 생성
-            source["visit_source_key"] = source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
-
             # 원천에서 조건걸기
             source = source[[self.person_source_value, self.orddate, self.exectime, self.ordseqno,
                               self.meddept, self.provider, self.patfg, self.medtime, self.age, self.처방명
                               , self.처방코드, self.결과내역, self.value_source_value, self.unit_source_value,
                               self.range_low, self.range_high, self.measurement_source_value]]
+            # visit_source_key 생성
+            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
             source[self.orddate] = pd.to_datetime(source[self.orddate], format="%Y%m%d")
             source[self.exectime] = pd.to_datetime(source[self.exectime], errors = "coerce")
             source = source[(source[self.orddate] <= pd.to_datetime(self.data_range)) & (source[self.measurement_source_value].str[:1].isin(["L", "P"])) ]

@@ -36,6 +36,9 @@ config.yaml구조
 `local_edi_data`: local_edi 데이터가 저장된 파일명  
 `person_source_value`: 원천 데이터의 환자등록번호 컬럼명  
 `location_data`: location 데이터가 저장된 파일명  
+`concept_unit`: unit_concept_id가 저장된 파일명  
+`concept_etc`: type_concept_id등 concept_id로 표현하기 위한 값들이 저장된 파일명  
+`unit_concept_synonym`: 동일한 unit_concept_id 매핑을 위한 동의어가 정의된 파일명  
 
 **CDM테이블**  
 
