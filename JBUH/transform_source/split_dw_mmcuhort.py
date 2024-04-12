@@ -44,7 +44,7 @@ def split_DW(config):
     med_filename = "dw_mmcuhort_med.csv"
     exm_filename = "dw_mmcuhort_exm.csv"
     etc_filename = "dw_mmcuhort_etc.csv"
-    chunk_size = 10000
+    chunk_size = 50000
     first_chunk = True
 
     for i, chunk in enumerate(pd.read_csv(os.path.join(path, filename), chunksize=chunk_size, dtype=str, lineterminator='\n', encoding="utf-8")):
@@ -58,9 +58,9 @@ def split_DW(config):
             source_etc.to_csv(os.path.join(path, etc_filename), index = False)
             first_chunk = False
         else :
-            source_med.to_csv(os.path.join(path, med_filename), index = False, mode = 'a')
-            source_exm.to_csv(os.path.join(path, exm_filename), index = False, mode = 'a')
-            source_etc.to_csv(os.path.join(path, etc_filename), index = False, mode = 'a')
+            source_med.to_csv(os.path.join(path, med_filename), index = False, mode = 'a', header=False)
+            source_exm.to_csv(os.path.join(path, exm_filename), index = False, mode = 'a', header=False)
+            source_etc.to_csv(os.path.join(path, etc_filename), index = False, mode = 'a', header=False)
 
         logging.debug(f"chunk index: {i}")
         logging.debug(f"{filename} row수: {len(chunk)}")
