@@ -931,6 +931,7 @@ class ConditionOccurrenceTransformer(DataTransformer):
                 "condition_status_concept_id": np.select(status_condition, status_id, default = 0),
                 "stop_reason": None,
                 "provider_id": source["provider_id"],
+                "주치의명": source["provider_name"],
                 "visit_occurrence_id": source["visit_occurrence_id"],
                 "visit_detail_id": source["visit_detail_id"],
                 "condition_source_value": source[self.condition_source_value],
@@ -938,9 +939,10 @@ class ConditionOccurrenceTransformer(DataTransformer):
                 "condition_source_concept_id": 0,
                 "condition_status_source_value": source[self.condition_status_source_value],
                 "visit_source_key": source["visit_source_key"],
-                "diagfg": source[self.diagfg],
-                "meddept": source[self.meddept],
-                "meddeptname": source["care_site_name"]
+                "환자구분": source[self.patfg],
+                "진료과": source[self.meddept],
+                "진료과명": source["care_site_name"],
+                "상병구분": source[self.diagfg]
                 })
 
             # datetime format 형식 맞춰주기, ns로 표기하는 값이 들어갈 수 있어서 처리함
@@ -1926,7 +1928,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "value_as_concept_id": 0,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.weight][2],
-                "unit_concept_name": measurement_concept[self.weight][3],
+                "unit_concept_id_name": measurement_concept[self.weight][3],
                 "range_low": None,
                 "range_high": None,
                 "provider_id": None,
@@ -1969,7 +1971,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "value_as_concept_id": 0,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.height][2],
-                "unit_concept_name": measurement_concept[self.height][3],
+                "unit_concept_id_name": measurement_concept[self.height][3],
                 "range_low": None,
                 "range_high": None,
                 "provider_id": None,
@@ -2013,7 +2015,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "value_as_concept_id": 0,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.bmi][2],
-                "unit_concept_name": measurement_concept[self.bmi][3],
+                "unit_concept_id_name": measurement_concept[self.bmi][3],
                 "range_low": None,
                 "range_high": None,
                 "provider_id": None,
@@ -2056,7 +2058,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "value_as_concept_id": 0,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.sbp][2],
-                "unit_concept_name": measurement_concept[self.sbp][3],
+                "unit_concept_id_name": measurement_concept[self.sbp][3],
                 "range_low": None,
                 "range_high": None,
                 "provider_id": None,
@@ -2099,7 +2101,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "value_as_concept_id": 0,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.dbp][2],
-                "unit_concept_name": measurement_concept[self.dbp][3],
+                "unit_concept_id_name": measurement_concept[self.dbp][3],
                 "range_low": None,
                 "range_high": None,
                 "provider_id": None,
@@ -2142,7 +2144,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "value_as_concept_id": 0,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.pr][2],
-                "unit_concept_name": measurement_concept[self.pr][3],
+                "unit_concept_id_name": measurement_concept[self.pr][3],
                 "range_low": None,
                 "range_high": None,
                 "provider_id": None,
@@ -2185,7 +2187,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "value_as_concept_id": 0,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.bt][2],
-                "unit_concept_name": measurement_concept[self.bt][3],
+                "unit_concept_id_name": measurement_concept[self.bt][3],
                 "range_low": None,
                 "range_high": None,
                 "provider_id": None,
@@ -2228,7 +2230,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "value_as_concept_id": 0,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.rr][2],
-                "unit_concept_name": measurement_concept[self.rr][3],
+                "unit_concept_id_name": measurement_concept[self.rr][3],
                 "range_low": None,
                 "range_high": None,
                 "provider_id": None,
@@ -2271,7 +2273,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "value_as_concept_id": 0,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.spo2][2],
-                "unit_concept_name": measurement_concept[self.spo2][3],
+                "unit_concept_id_name": measurement_concept[self.spo2][3],
                 "range_low": None,
                 "range_high": None,
                 "provider_id": None,
@@ -2802,7 +2804,7 @@ class MergeProcedureTransformer(DataTransformer):
             # axis = 0을 통해 행으로 데이터 합치기, ignore_index = True를 통해 dataframe index재설정
             cdm = pd.concat([source1, source2], axis = 0, ignore_index=True)
 
-            cdm["procedure_id"] = cdm.index + 1
+            cdm["procedure_occurrence_id"] = cdm.index + 1
 
             logging.debug(f'CDM 데이터 row수: {len(cdm)}, {self.memory_usage}')
             logging.debug(f"요약:\n{cdm.describe(include = 'O').T.to_string()}, {self.memory_usage}")

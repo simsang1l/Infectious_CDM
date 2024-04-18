@@ -15,6 +15,9 @@ location_data: "location"
 concept_unit: "concept_unit"
 concept_etc: "concept_etc"
 unit_concept_synonym: "unit_concept_synonym"
+excel_path: "QC/품질진단지표.xlsx"
+sheet_table_count: "원본비교결과"
+sheet_field_summary: "컬럼별데이터분포진단"
 
 care_site:
   data:
@@ -191,7 +194,7 @@ merge_measurement:
 procedure_order:
   data:
     source_data: "dw_mmcuhort_etc"
-    output_filename: "procedure_occurrence_order"
+    output_filename: "procedure_order"
   columns:
     meddept: "MEDDEPT"
     provider: "ORDDR"
@@ -232,7 +235,7 @@ procedure_stexmrst:
 
 merge_procedure:
   data:
-    source_data1: "procedure_occurrence_order"
+    source_data1: "procedure_order"
     source_data2: "procedure_stexmrst"
     output_filename: "procedure_occurrence"
 
