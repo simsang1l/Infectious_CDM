@@ -1,5 +1,5 @@
 """
-condition_occurrence테이블의 field별 기초 통계 정보 구하기
+observation_period테이블의 field별 기초 통계 정보 구하기
 """
 
 import pandas as pd
@@ -12,15 +12,13 @@ project_dir = os.path.dirname(parent_dir)  # QC의 부모 디렉토리 (my_proje
 sys.path.insert(0, project_dir)
 from QC.src.excel_util import write_df_to_excel
 
-def condition_occurrence_field_summary(cdm_path, excel_path, sheetname):
-    table_name = "condition_occurrence"
-    id = 6
+def observation_period_field_summary(cdm_path, excel_path, sheetname):
+    table_name = "observation_period"
+    id = 10
     cdm = pd.read_csv(os.path.join(cdm_path, table_name + ".csv"))
 
-    cdm["condition_start_date"] = pd.to_datetime(cdm["condition_start_date"])
-    cdm["condition_start_datetime"] = pd.to_datetime(cdm["condition_start_datetime"])
-    cdm["condition_end_date"] = pd.to_datetime(cdm["condition_end_date"])
-    cdm["condition_end_datetime"] = pd.to_datetime(cdm["condition_end_datetime"])
+    cdm["observation_period_start_date"] = pd.to_datetime(cdm["observation_period_start_date"])
+    cdm["observation_period_end_date"] = pd.to_datetime(cdm["observation_period_end_date"])
     
     # dataframe.describe에는 numeric데이터에 대해서는 고유값(unique)수가 제공되지 않아 직접 계산
     # dataframe.describe에는 datetime데이터에 대해서는 고유값(unique)수와 최빈값(top), 최빈값수(freq)가 제공되지 않아 직접 계산
@@ -37,7 +35,7 @@ def condition_occurrence_field_summary(cdm_path, excel_path, sheetname):
         mode_value = cdm[col].mode()[0] if not cdm[col].mode().empty else np.nan
         manual_summary_list.append([col, cdm[col].nunique(), mode_value, mode_count])
 
-    manual_summary = pd.DataFrame(manual_summary_list, columns = ("column_name", "manual_unique", "manual_top", "manual_freq"))
+    manual_summary = pd.DataFrame(manual_summary_list, columns = ("column_name", "unique", "top", "freq"))
 
     summary = cdm.describe(include="all", datetime_is_numeric=True).T
     summary.index.name = "column_name"
@@ -55,12 +53,9 @@ def condition_occurrence_field_summary(cdm_path, excel_path, sheetname):
     result = pd.merge(summary, null_count, on="column_name", how="outer")
     result = pd.merge(result, null_ratio, on="column_name", how="outer")
     result = pd.merge(result, manual_summary, on="column_name", how="outer")
-
+    
     result["id"] = f"field_{str(id).zfill(4)}"
     result["table_name"] = table_name
-    result["unique"] = np.select([result["unique"].isnull()], [result["manual_unique"]], default=result["unique"])
-    result["top"] = np.select([result["top"].isnull()], [result["manual_top"]], default=result["top"])
-    result["freq"] = np.select([result["freq"].isnull()], [result["manual_freq"]], default=result["freq"])
 
     result = result[["id", "table_name", "column_name", "count", "unique",
                 "top", "freq", "mean", "std", "min", "25%", "50%", "75%", "max", "null_count", "null_ratio"]]

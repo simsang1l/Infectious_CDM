@@ -1,7 +1,3 @@
-"""
-condition_occurrence테이블의 field별 기초 통계 정보 구하기
-"""
-
 import pandas as pd
 import numpy as np
 import os, sys
@@ -12,16 +8,11 @@ project_dir = os.path.dirname(parent_dir)  # QC의 부모 디렉토리 (my_proje
 sys.path.insert(0, project_dir)
 from QC.src.excel_util import write_df_to_excel
 
-def condition_occurrence_field_summary(cdm_path, excel_path, sheetname):
-    table_name = "condition_occurrence"
-    id = 6
+def care_site_field_summary(cdm_path, excel_path, sheetname):
+    table_name = "care_site"
+    id = 1
     cdm = pd.read_csv(os.path.join(cdm_path, table_name + ".csv"))
 
-    cdm["condition_start_date"] = pd.to_datetime(cdm["condition_start_date"])
-    cdm["condition_start_datetime"] = pd.to_datetime(cdm["condition_start_datetime"])
-    cdm["condition_end_date"] = pd.to_datetime(cdm["condition_end_date"])
-    cdm["condition_end_datetime"] = pd.to_datetime(cdm["condition_end_datetime"])
-    
     # dataframe.describe에는 numeric데이터에 대해서는 고유값(unique)수가 제공되지 않아 직접 계산
     # dataframe.describe에는 datetime데이터에 대해서는 고유값(unique)수와 최빈값(top), 최빈값수(freq)가 제공되지 않아 직접 계산
     manual_summary_list = []
@@ -67,6 +58,3 @@ def condition_occurrence_field_summary(cdm_path, excel_path, sheetname):
     
     df = pd.DataFrame(result)    
     write_df_to_excel(excel_path, sheetname, df)
-
-
-

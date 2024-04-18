@@ -1,5 +1,5 @@
 """
-사용한 원본데이터와 변환된 CDM Person테이블의 건수 및 환자수 확인
+사용한 원본데이터와 변환된 CDM procedure_stexmrst테이블의 건수 및 환자수 확인
 """
 
 import pandas as pd
