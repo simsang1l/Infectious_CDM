@@ -1347,15 +1347,6 @@ class MeasurementStexmrstTransformer(DataTransformer):
             local_edi["FROMDATE"].fillna(pd.Timestamp('1900-01-01'), inplace = True)
             local_edi["TODATE"] = pd.to_datetime(local_edi["TODATE"] , format="%Y%m%d", errors="coerce")
             local_edi["TODATE"].fillna(pd.Timestamp('2099-12-31'), inplace = True)
-
-            # 데이터 컬럼 줄이기
-            person_data = person_data[["person_id", "person_source_value", "환자명"]]
-            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "care_site_name"]]
-            provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
-            visit_data = visit_data[["visit_occurrence_id", "visit_start_datetime", "care_site_id", "visit_source_value", "person_id"]]
-            visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id"]]
-            unit_data = unit_data[["concept_id", "concept_name", "concept_code"]]
-            concept_etc = concept_etc[["concept_id", "concept_name"]]
             
             # LOCAL코드와 EDI코드 매핑 테이블과 병합
             source = pd.merge(source, local_edi, left_on=self.measurement_source_value, right_on="ORDCODE", how="left", suffixes=["", "_local_edi"])
@@ -1365,16 +1356,19 @@ class MeasurementStexmrstTransformer(DataTransformer):
             logging.debug(f"EDI코드 사용기간별 필터 적용 후 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # person table과 병합
+            person_data = person_data[["person_id", "person_source_value", "환자명"]]
             source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
             del person_data
             logging.debug(f'person 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # care_site table과 병합
+            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "care_site_name"]]
             source = pd.merge(source, care_site_data, left_on=self.meddept, right_on="care_site_source_value", how="left")
             del care_site_data
             logging.debug(f'care_site 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # provider table과 병합
+            provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
             source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
             logging.debug(f'provider 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
 
@@ -1382,16 +1376,19 @@ class MeasurementStexmrstTransformer(DataTransformer):
             visit_data["visit_start_datetime"] = pd.to_datetime(visit_data["visit_start_datetime"])
 
             # visit_occurrence table과 병합
+            visit_data = visit_data[["visit_occurrence_id", "visit_start_datetime", "care_site_id", "visit_source_value", "person_id"]]
             source = pd.merge(source, visit_data, left_on=["person_id", "care_site_id", self.patfg, self.medtime], right_on=["person_id", "care_site_id", "visit_source_value", "visit_start_datetime"], how="left", suffixes=('', '_y'))
             del visit_data
             logging.debug(f'visit_occurrence 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # visit_detail table과 병합
+            visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id"]]            
             source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
             logging.debug(f'visit_detail 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
 
             ### unit매핑 작업 ###
             # concept_unit과 병합
+            unit_data = unit_data[["concept_id", "concept_name", "concept_code"]]
             source = pd.merge(source, unit_data, left_on=self.unit_source_value, right_on="concept_code", how="left", suffixes=["", "_unit"])
             logging.debug(f'unit 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
             # unit 동의어 적용
@@ -1400,6 +1397,7 @@ class MeasurementStexmrstTransformer(DataTransformer):
             
 
             ### concept_etc테이블과 병합 ###
+            concept_etc = concept_etc[["concept_id", "concept_name"]]
             concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)            
 
             # type_concept_id 만들고 type_concept_id_name 기반 만들기
@@ -1423,7 +1421,7 @@ class MeasurementStexmrstTransformer(DataTransformer):
                     , 4171756
             ]
 
-            source["operator_concept_id"] = np.select(operator_condition, operator_value, default = 0)
+            source["operator_concept_id"] = np.select(operator_condition, operator_value)
             source = pd.merge(source, concept_etc, left_on = "operator_concept_id", right_on="concept_id", how="left", suffixes=('', '_operator'))
             logging.debug(f'concept_etc: operator_concept_id 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
 
@@ -1444,7 +1442,7 @@ class MeasurementStexmrstTransformer(DataTransformer):
                 , 9189
                 , 9191
             ]
-            source["value_as_concept_id"] = np.select(value_concept_condition, value_concept_value, default = 0)
+            source["value_as_concept_id"] = np.select(value_concept_condition, value_concept_value)
             source = pd.merge(source, concept_etc, left_on = "value_as_concept_id", right_on="concept_id", how="left", suffixes=('', '_value_as_concept'))
             logging.debug(f'concept_etc: value_as_concept_id 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
             
