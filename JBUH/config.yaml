@@ -18,6 +18,7 @@ unit_concept_synonym: "unit_concept_synonym"
 excel_path: "QC/품질진단지표.xlsx"
 sheet_table_count: "원본비교결과"
 sheet_field_summary: "컬럼별데이터분포진단"
+sheet_dq: "점검사항"
 
 care_site:
   data:
