@@ -19,6 +19,7 @@ excel_path: "QC/품질진단지표.xlsx"
 sheet_table_count: "원본비교결과"
 sheet_field_summary: "컬럼별데이터분포진단"
 sheet_dq: "점검사항"
+sheet_meta: "메타데이터진단"
 
 care_site:
   data:
@@ -248,3 +249,38 @@ observation_period:
     measurement: "measurement"
     procedure: "procedure_occurrence"
     output_filename: "observation_period"
+
+metadata:
+  wbc_count: ['L200201']
+  hb: ['L200203']
+  hematocrit: ['L200204']
+  platelet_count: ['L200209']
+  lymphocyte_count: ['L200316']
+  monocyte_count: ['L200317']
+  neurophil_count: ['L200318']
+  sodium: ['L3010', 'L7111']
+  potassium: ['L3011', 'L7112']
+  ast: ['L3015']
+  alt: ['L3016']
+  total_bilirubin: ['L3018']
+  total_protein: ['L3020']
+  albumin: ['L3021']
+  bun: ['L3024']
+  creatinine: ['L3025', 'L3025C']
+  egfr: ['L3025R']
+  crp: ['L3052']
+  troponin_i: ['L3301', 'L7131']
+  ck_mb: ['L3302']
+  ph: ['L100202', 'L700202', 'L100404']
+  paco2: ['LP100102']
+  pao2: ['LP100103']
+  arterial_ph: ['LP100101']
+  # vs는 concept_id로 조회
+  temperature: [4302666]
+  sbp: [4152194]
+  dbp: [4154790]
+  heartrate: [4224504]
+  respiratory_rate: [4313591]
+  bmi: [40490382]
+  height: [4177340]
+  weight: [4099154]
