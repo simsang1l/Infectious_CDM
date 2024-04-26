@@ -1215,13 +1215,14 @@ class DrugexposureTransformer(DataTransformer):
             "drug_type_concept_id": source["drug_type_concept_id"],
             "drug_type_concept_id_name": source["concept_name"],
             "stop_reason": None,
-            "refills": 0,
+            "refills": None,
             "quantity": source[self.days_supply].astype(int) * source[self.qty].astype(float) * source[self.cnt].astype(float),
             "days_supply": source[self.days_supply].astype(int),
             "sig": None,
             "route_concept_id": 0,
             "lot_number": None,
             "provider_id": source["provider_id"],
+            "처방의명": source["provider_name"],
             "visit_occurrence_id": source["visit_occurrence_id"],
             "visit_detail_id": source["visit_detail_id"],
             "drug_source_value": source[self.drug_source_value],
@@ -1519,6 +1520,7 @@ class MeasurementStexmrstTransformer(DataTransformer):
                 "visit_source_key": source["visit_source_key"],
                 "처방코드": source[self.처방코드],
                 "처방명": source[self.처방명],
+                "환자구분": source[self.patfg],
                 "진료과": source[self.meddept],
                 "진료과명": source["care_site_name"],
                 "처방일": source[self.orddate],
@@ -1805,7 +1807,7 @@ class MeasurementVSTransformer(DataTransformer):
             logging.debug(f'원천 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # visit_source_key 생성
-            source["visit_source_key"] = source["visit_source_key"] = source[self.person_source_value] + source[self.admtime].astype(str) + source[self.patfg] + source[self.meddept]
+            source["visit_source_key"] = source[self.person_source_value] + source[self.admtime].astype(str) + source[self.patfg] + source[self.meddept]
 
             # 원천에서 조건걸기
             source[self.admtime] = source[self.admtime].apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
@@ -1922,16 +1924,17 @@ class MeasurementVSTransformer(DataTransformer):
                 "measurement_time": source_weight[self.measurement_datetime].dt.time, 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_weight["concept_name"],
-                "operator_concept_id": 0,
+                "operator_concept_id": None,
                 "operator_concept_id_name": None,
                 "value_as_number": source_weight[self.weight],
-                "value_as_concept_id": 0,
+                "value_as_concept_id": None,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.weight][2],
                 "unit_concept_id_name": measurement_concept[self.weight][3],
                 "range_low": None,
                 "range_high": None,
                 "provider_id": None,
+                "provider_name": None,
                 "visit_occurrence_id": source_weight["visit_occurrence_id"],
                 "visit_detail_id": source_weight["visit_detail_id"],
                 "measurement_source_value": measurement_concept[self.weight][1],
@@ -1951,7 +1954,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "정상치(상)": None,
                 "정상치(하)": None,
                 "나이": None,
-                "결과내역": None              
+                "결과내역": source_weight[self.weight]              
                 })
 
             # height값이 저장된 cdm_bmi생성
@@ -1965,10 +1968,10 @@ class MeasurementVSTransformer(DataTransformer):
                 "measurement_time": source_height[self.measurement_datetime].dt.time, 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_height["concept_name"],
-                "operator_concept_id": 0,
+                "operator_concept_id": None,
                 "operator_concept_id_name": None,
                 "value_as_number": source_height[self.height],
-                "value_as_concept_id": 0,
+                "value_as_concept_id": None,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.height][2],
                 "unit_concept_id_name": measurement_concept[self.height][3],
@@ -1995,7 +1998,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "정상치(상)": None,
                 "정상치(하)": None,
                 "나이": None,
-                "결과내역": None  
+                "결과내역": source_height[self.height]  
                 })
 
             # bmi값이 저장된 cdm_bmi생성
@@ -2009,10 +2012,10 @@ class MeasurementVSTransformer(DataTransformer):
                 "measurement_time": source_bmi[self.measurement_datetime].dt.time, 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_bmi["concept_name"],
-                "operator_concept_id": 0,
+                "operator_concept_id": None,
                 "operator_concept_id_name": None,
                 "value_as_number": source_bmi[self.bmi],
-                "value_as_concept_id": 0,
+                "value_as_concept_id": None,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.bmi][2],
                 "unit_concept_id_name": measurement_concept[self.bmi][3],
@@ -2039,7 +2042,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "정상치(상)": None,
                 "정상치(하)": None,
                 "나이": None,
-                "결과내역": None  
+                "결과내역": source_bmi[self.bmi]  
                 })
 
             cdm_sbp = pd.DataFrame({
@@ -2052,10 +2055,10 @@ class MeasurementVSTransformer(DataTransformer):
                 "measurement_time": source_sbp[self.measurement_datetime].dt.time, 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_sbp["concept_name"],
-                "operator_concept_id": 0,
+                "operator_concept_id": None,
                 "operator_concept_id_name": None,
                 "value_as_number": source_sbp[self.sbp],
-                "value_as_concept_id": 0,
+                "value_as_concept_id": None,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.sbp][2],
                 "unit_concept_id_name": measurement_concept[self.sbp][3],
@@ -2082,7 +2085,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "정상치(상)": None,
                 "정상치(하)": None,
                 "나이": None,
-                "결과내역": None  
+                "결과내역": source_sbp[self.sbp]  
                 })
 
             cdm_dbp = pd.DataFrame({
@@ -2095,10 +2098,10 @@ class MeasurementVSTransformer(DataTransformer):
                 "measurement_time": source_dbp[self.measurement_datetime].dt.time, 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_dbp["concept_name"],
-                "operator_concept_id": 0,
+                "operator_concept_id": None,
                 "operator_concept_id_name": None,
                 "value_as_number": source_dbp[self.dbp],
-                "value_as_concept_id": 0,
+                "value_as_concept_id": None,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.dbp][2],
                 "unit_concept_id_name": measurement_concept[self.dbp][3],
@@ -2125,7 +2128,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "정상치(상)": None,
                 "정상치(하)": None,
                 "나이": None,
-                "결과내역": None  
+                "결과내역": source_dbp[self.dbp]  
                 })
             
             cdm_pr = pd.DataFrame({
@@ -2138,10 +2141,10 @@ class MeasurementVSTransformer(DataTransformer):
                 "measurement_time": source_pr[self.measurement_datetime].dt.time, 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_pr["concept_name"],
-                "operator_concept_id": 0,
+                "operator_concept_id": None,
                 "operator_concept_id_name": None,
                 "value_as_number": source_pr[self.pr],
-                "value_as_concept_id": 0,
+                "value_as_concept_id": None,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.pr][2],
                 "unit_concept_id_name": measurement_concept[self.pr][3],
@@ -2168,7 +2171,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "정상치(상)": None,
                 "정상치(하)": None,
                 "나이": None,
-                "결과내역": None  
+                "결과내역": source_pr[self.pr]  
                 })
             
             cdm_bt = pd.DataFrame({
@@ -2181,10 +2184,10 @@ class MeasurementVSTransformer(DataTransformer):
                 "measurement_time": source_bt[self.measurement_datetime].dt.time, 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_bt["concept_name"],
-                "operator_concept_id": 0,
+                "operator_concept_id": None,
                 "operator_concept_id_name": None,
                 "value_as_number": source_bt[self.bt],
-                "value_as_concept_id": 0,
+                "value_as_concept_id": None,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.bt][2],
                 "unit_concept_id_name": measurement_concept[self.bt][3],
@@ -2211,7 +2214,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "정상치(상)": None,
                 "정상치(하)": None,
                 "나이": None,
-                "결과내역": None  
+                "결과내역": source_bt[self.bt]  
                 })
             
             cdm_rr = pd.DataFrame({
@@ -2224,10 +2227,10 @@ class MeasurementVSTransformer(DataTransformer):
                 "measurement_time": source_rr[self.measurement_datetime].dt.time, 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_rr["concept_name"],
-                "operator_concept_id": 0,
+                "operator_concept_id": None,
                 "operator_concept_id_name": None,
                 "value_as_number": source_rr[self.rr],
-                "value_as_concept_id": 0,
+                "value_as_concept_id": None,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.rr][2],
                 "unit_concept_id_name": measurement_concept[self.rr][3],
@@ -2254,7 +2257,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "정상치(상)": None,
                 "정상치(하)": None,
                 "나이": None,
-                "결과내역": None  
+                "결과내역": source_rr[self.rr]  
                 })
             
             cdm_spo2 = pd.DataFrame({
@@ -2267,10 +2270,10 @@ class MeasurementVSTransformer(DataTransformer):
                 "measurement_time": source_spo2[self.measurement_datetime].dt.time, 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_spo2["concept_name"],
-                "operator_concept_id": 0,
+                "operator_concept_id": None,
                 "operator_concept_id_name": None,
                 "value_as_number": source_spo2[self.spo2],
-                "value_as_concept_id": 0,
+                "value_as_concept_id": None,
                 "value_as_concept_id_name": None,
                 "unit_concept_id": measurement_concept[self.spo2][2],
                 "unit_concept_id_name": measurement_concept[self.spo2][3],
@@ -2297,7 +2300,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "정상치(상)": None,
                 "정상치(하)": None,
                 "나이": None,
-                "결과내역": None  
+                "결과내역": source_spo2[self.spo2]  
                 })
             
             logging.debug(f"""CDM별 데이터 row수: 
@@ -2527,7 +2530,7 @@ class ProcedureOrderTransformer(DataTransformer):
                 "procedure_datetime": np.select(procedure_date_condition, procedure_datetime_value, default = source[self.orddate]),
                 "procedure_type_concept_id": 38000275,
                 "procedure_type_concept_id_name": source["concept_name"],
-                "modifier_concept_id": 0,
+                "modifier_concept_id": None,
                 "quantity": None,
                 "provider_id": source["provider_id"],
                 "처방의명": source["provider_name"],
@@ -2728,7 +2731,7 @@ class ProcedureStexmrstTransformer(DataTransformer):
                 "procedure_datetime": np.select(procedure_date_condition, procedure_datetime_value, default = source[self.orddate]),
                 "procedure_type_concept_id": 38000275,
                 "procedure_type_concept_id_name": source["concept_name"],
-                "modifier_concept_id": 0,
+                "modifier_concept_id": None,
                 "quantity": None,
                 "provider_id": source["provider_id"],
                 "visit_occurrence_id": source["visit_occurrence_id"],
