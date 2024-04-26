@@ -30,20 +30,38 @@ if __name__ == "__main__":
         local_edi = LocalEDITransformer(config)    
         local_edi.transform()
 
+        measurement_edi = MeasurementEDITransformer(config)    
+        measurement_edi.transform()
+
         measurement_diag = MeasurementDiagTransformer(config)
         measurement_diag.transform()
 
         measurement_pth = MeasurementpthTransformer(config)
         measurement_pth.transform()
 
-        measurement_bmi = MeasurementVSTransformer(config)
-        measurement_bmi.transform()
+        measurement_vs = MeasurementVSTransformer(config)
+        measurement_vs.transform()
+
+        measurement_ni = MeasurementNITransformer(config)
+        measurement_ni.transform()
 
         merge_measurement = MergeMeasurementTransformer(config)
         merge_measurement.transform()
 
-        procedure = ProcedureTransformer(config)
-        procedure.transform()
+        procedure_edi = ProcedureEDITransformer(config)
+        procedure_edi.transform()
+
+        procedure_pacs = ProcedurePACSTransformer(config)
+        procedure_pacs.transform()
+
+        procedure_baseorder = ProcedureBaseOrderTransformer(config)
+        procedure_baseorder.transform()
+
+        procedure_bldorder = ProcedureBldOrderTransformer(config)
+        procedure_bldorder.transform()
+
+        merge_procedure = MergeProcedureTransformer(config)
+        merge_procedure.transform()
 
         observation_period = ObservationPeriodTransformer(config)
         observation_period.transform()

@@ -4,22 +4,26 @@ source_encoding: "cp949"
 cdm_encoding: "utf-8"
 source_dtype: "str"
 target_zip: "419"
-data_range: "2023-08-31"
+data_range: "2023-12-31"
 care_site_data: "care_site"
 person_data: "person"
 provider_data: "provider"
 visit_data: "visit_occurrence"
 visit_detail_data: "visit_detail"
-local_edi_data: "local_edi"
+measurement_edi_data: "measurement_edi"
+procedure_edi_data: "procedure_edi"
 person_source_value: "PID"
 location_data: "location"
 concept_unit: "concept_unit"
+concept_etc: "concept_etc"
+unit_concept_synonym: unit_concept_synonym
 hospital: "INSTCD"
 drug_edi_data: "drug_edi"
 sugacode: "CALCSCORCD"
 edicode: "INSUEDICD"
 fromdate: "FROMDD"
 todate: "TODD"
+visit_no: "CRETNO"
 
 care_site:
   data:
@@ -37,7 +41,7 @@ provider:
     source_data: "21.RPBMEMPL_사원정보마스터"
     output_filename: "provider"
   columns:
-    provider_name: "EMPLNO"
+    provider_name: "HNGNM"
     provider_source_value: "EMPLNO"
     specialty_source_value: JOBKINDCD
     gender_source_value: GNDR
@@ -52,7 +56,10 @@ person:
     death_datetime: "DETHDT"
     birth_datetime: "BRTHDD"
     race_source_value: "FORGERYN"
+    person_name: "HNGNM"
     location_source_value: "ZIPCD1"
+    abotyp: "BTYPE"
+    rhtyp: "RH"
 
 visit_occurrence:
   data:
@@ -70,6 +77,8 @@ visit_occurrence:
     dschdate: "DSCHDD"
     dschtime: "DSCHTM"
     meddept: "ORDDEPTCD"
+    orddr: "ORDDRID"
+    chadr: "ATDOCTID"
 
 condition_occurrence:
   data:
@@ -83,17 +92,24 @@ condition_occurrence:
     condition_source_value: "DIAGCD"
     condition_status_source_value: null
     orddd: "ORDDD"
+    diagfg: DIAGTYPECD
 
 drug_edi:
   data:
     order_data: "22.ADBMDRUG_약제마스터"
     concept_data: "concept_EDI_KDC"
+    edi_atc: "edi_atc"
     output_filename: "drug_edi"
   columns:
     ordercode: "DRUGCD"
     edicode: "EDICD"
     fromdate: "DRUGFROMDD"
     todate: "DRUGTODD"
+    standard_code: "표준코드"
+    atccode: "ATC코드"
+    atcname: "ATC 코드명"
+    edi_fromdate: "품목허가일자"
+    edi_todate: "취소일자"
 
 drug_exposure:
   data:
@@ -108,6 +124,7 @@ drug_exposure:
     provider: "ORDDRID"
     drug_exposure_start_datetime: "PRCPDD"
     drug_source_value: "PRCPCD"
+    drug_source_value_name: "ORDNM"
     days_supply: "PRCPDAYNO"
     qty: "PRCPQTY"
     cnt: "PRCPTIMS"
@@ -115,19 +132,19 @@ drug_exposure:
     dose_unit_source_value: "PRCPQTYUNITFLAG"
     orddd: "ORDDD"
 
-local_edi:
+measurement_edi:
   data:
     order_data: "23.LLFMTCLS_검체검사"
     edi_data: "17.PICMMECH_수가마스터"
     concept_data: "concept_EDI_KDC"
-    output_filename: "local_edi"
+    output_filename: "measurement_edi"
   columns:
     ordercode: "TCLSCD"
     sugacode: "CALCSCORCD"
     edicode: "INSUEDICD"
     fromdate: "FROMDD"
     todate: "TODD"
-    engnm: "ENGNM"
+    ordnm: "ORDNM"
     tclsnm: "TCLSNM"
 
 measurement_diag:
@@ -144,8 +161,11 @@ measurement_diag:
     measurement_date: "LASTREPTDT"
     measurement_source_value: "TESTCD"
     value_source_value: "INPTRSLT"
+    unit_source_value: "TESTRSLTUNIT"
     range_low: "REFL"
     range_high: "REFH"
+    ordcode: "TCLSCD"
+    orddd: "ORDDD"
 
 measurement_pth:
   data:
@@ -163,12 +183,14 @@ measurement_pth:
     value_source_value: "RSLTCNTS1"
     range_low: null
     range_high: null
-    
+    unit_source_value: null
+    orddd: "ORDDD"
 
-measurement_vs:
+
+measurement_ni:
   data:
     source_data: "01.MNWMPGIF_간호정보조사(일반)"
-    output_filename: "measurement_bmi"
+    output_filename: "measurement_ni"
   columns:
     provider: "RECRID"
     admtime: "INDD"
@@ -181,24 +203,87 @@ measurement_vs:
     bdtp: "BDTP"
     spo2: "SPO2"
 
+
+measurement_vs:
+  data:
+    source_data: "001_4.임상관찰기록 샘플데이터"
+    output_filename: "measurement_vs"
+  columns:
+    orddd: "ORDDD"
+    measurement_date: "RECDT"
+    value_source_value: "RECRSLT"
+    measurement_source_value: "ITEMNM"
+
+
 merge_measurement:
   data:
     source_data1: "measurement_diag"
     source_data2: "measurement_pth"
     source_data3: "measurement_vs"
+    source_data4: "measurement_ni"
     output_filename: "measurement"
 
-procedure:
+
+procedure_edi:
+  data:
+    order_data: 13.MMBTPRCD_처방마스터
+    edi_data: 17.PICMMECH_수가마스터
+    concept_data: "concept_EDI_KDC"
+    output_filename: procedure_edi
+  columns:
+    ordercode: "PRCPCD"
+    sugacode: "CALCSCORCD"
+    edicode: "INSUEDICD"
+    fromdate: "FROMDD"
+    todate: "TODD"
+    ordnm: "ORDNM"
+
+
+procedure_pacs:
   data:
     source_data1: "02.MMOHIPRC_검사처방"
     source_data2: "28.MMODEXIP_처방상세"
     source_data3: "09.MMOHIPRC_영상검사결과"
-    output_filename: "procedure_occurrence"
+    output_filename: "procedure_pacs"
   columns:
     meddept: "ORDDEPTCD"
     provider: "ORDDRID"
     orddate: "PRCPDD"
     procedure_source_value: "PRCPCD"
+    orddd: "ORDDD"
+    readtext: "READTEXT"
+    conclusion: "CONCLUSION"
+
+procedure_baseorder:
+  data:
+    source_data: "10.MMOHIPRC_지시처방"
+    output_filename: "procedure_baseorder"
+  columns:
+    meddept: "ORDDEPTCD"
+    provider: "ORDDRID"
+    procedure_date: "PRCPDD"
+    procedure_source_value: "PRCPCD"
+    orddd: "ORDDD"
+    ordname: "PRCPNM"
+
+procedure_bldorder:
+  data:
+    source_data: "06.MMOHIPRC_수혈처방"
+    output_filename: "procedure_bldorder"
+  columns:
+    meddept: "ORDDEPTCD"
+    provider: "ORDDRID"
+    procedure_date: "PRCPDD"
+    procedure_source_value: "PRCPCD"
+    orddd: "ORDDD"
+    ordname: "PRCPNM"
+    
+merge_procedure:
+  data:
+    source_data1: "procedure_pacs"
+    source_data2: "procedure_baseorder"
+    source_data3: "procedure_bldorder"
+    output_filename: "procedure_occurrence"
 
 observation_period:
   data:
