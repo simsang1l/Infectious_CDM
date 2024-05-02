@@ -1515,7 +1515,7 @@ class MeasurementStexmrstTransformer(DataTransformer):
             logging.debug(f'원천 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # visit_source_key 생성
-            source["visit_source_key"] = source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
+            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
 
             # 원천에서 조건걸기
             source = source[[self.person_source_value, self.orddate, self.exectime, self.ordseqno,
@@ -2297,7 +2297,7 @@ class MeasurementVSTransformer(DataTransformer):
             logging.debug(f'원천 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # visit_source_key 생성
-            source["visit_source_key"] = source["visit_source_key"] = source[self.person_source_value] + source[self.admtime].astype(str) + source[self.patfg] + source[self.meddept]
+            source["visit_source_key"] = source[self.person_source_value] + source[self.admtime].astype(str) + source[self.patfg] + source[self.meddept]
 
             # 원천에서 조건걸기
             source[self.admtime] = source[self.admtime].apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
@@ -2894,7 +2894,7 @@ class ProcedureOrderChunkTransformer(DataTransformer):
         소스 데이터를 읽어들여 CDM 형식으로 변환하고 결과를 CSV 파일로 저장하는 메소드입니다.
         """
         try:
-            first_chunk = False
+            first_chunk = True
 
             source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype, chunksize=self.chunksize)
             local_edi = self.read_csv(self.local_edi_data, path_type = self.cdm_flag, dtype = self.source_dtype )
@@ -2912,6 +2912,7 @@ class ProcedureOrderChunkTransformer(DataTransformer):
                 transformed_data = self.transform_cdm(chunk_source_data)
 
                 transformed_data.to_csv(self.save_path + ".csv", mode = 'a', index = False, header=first_chunk)
+                first_chunk = False
             
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -2927,7 +2928,7 @@ class ProcedureOrderChunkTransformer(DataTransformer):
         """
         try: 
             # visit_source_key 생성
-            source["visit_source_key"] = source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
+            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
 
             # 원천에서 조건걸기
             source[self.orddate] = pd.to_datetime(source[self.orddate], format="%Y%m%d")
@@ -3118,7 +3119,7 @@ class ProcedureOrderTransformer(DataTransformer):
             logging.debug(f"원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # visit_source_key 생성
-            source["visit_source_key"] = source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
+            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
 
             # 원천에서 조건걸기
             source[self.orddate] = pd.to_datetime(source[self.orddate], format="%Y%m%d")
@@ -3325,7 +3326,7 @@ class ProcedureStexmrstChunkTransformer(DataTransformer):
                                 self.rslttext, self.conclusion, self.ordcode, self.ordname, self.procedure_source_value,
                                 self.value_source_value, self.range_high, self.range_low, self.unit_source_value]]
             # visit_source_key 생성
-            source["visit_source_key"] = source["visit_source_key"] = source[self.person_source_value] + source[self.medtime ].astype(str) + source[self.patfg] + source[self.meddept]
+            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime ].astype(str) + source[self.patfg] + source[self.meddept]
 
             source[self.orddate] = pd.to_datetime(source[self.orddate])
             source = source[(source[self.orddate] <= pd.to_datetime(self.data_range)) & (~source[self.procedure_source_value].str[:1].isin(["L", "P"])) ]
@@ -3525,7 +3526,7 @@ class ProcedureStexmrstTransformer(DataTransformer):
                                 self.rslttext, self.conclusion, self.ordcode, self.ordname, self.procedure_source_value,
                                 self.value_source_value, self.range_high, self.range_low, self.unit_source_value]]
             # visit_source_key 생성
-            source["visit_source_key"] = source["visit_source_key"] = source[self.person_source_value] + source[self.medtime ].astype(str) + source[self.patfg] + source[self.meddept]
+            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime ].astype(str) + source[self.patfg] + source[self.meddept]
 
             source[self.orddate] = pd.to_datetime(source[self.orddate])
             source = source[(source[self.orddate] <= pd.to_datetime(self.data_range)) & (~source[self.procedure_source_value].str[:1].isin(["L", "P"])) ]
@@ -3699,7 +3700,7 @@ class MergeProcedureTransformer(DataTransformer):
             # axis = 0을 통해 행으로 데이터 합치기, ignore_index = True를 통해 dataframe index재설정
             cdm = pd.concat([source1, source2], axis = 0, ignore_index=True)
 
-            cdm["procedure_id"] = cdm.index + 1
+            cdm["procedure_occurrence_id"] = cdm.index + 1
 
             logging.debug(f'CDM 데이터 row수: {len(cdm)}, {self.memory_usage}')
             logging.debug(f"요약:\n{cdm.describe(include = 'O').T.to_string()}, {self.memory_usage}")
