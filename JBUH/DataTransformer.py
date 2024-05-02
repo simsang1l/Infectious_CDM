@@ -2435,7 +2435,7 @@ class ProcedureOrderTransformer(DataTransformer):
             logging.debug(f"원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # visit_source_key 생성
-            source["visit_source_key"] = source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
+            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
 
             # 원천에서 조건걸기
             source[self.orddate] = pd.to_datetime(source[self.orddate], format="%Y%m%d")
@@ -2633,7 +2633,7 @@ class ProcedureStexmrstTransformer(DataTransformer):
                                 self.rslttext, self.conclusion, self.ordcode, self.ordname, self.procedure_source_value,
                                 self.value_source_value, self.range_high, self.range_low, self.unit_source_value]]
             # visit_source_key 생성
-            source["visit_source_key"] = source["visit_source_key"] = source[self.person_source_value] + source[self.medtime ].astype(str) + source[self.patfg] + source[self.meddept]
+            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime ].astype(str) + source[self.patfg] + source[self.meddept]
 
             source[self.orddate] = pd.to_datetime(source[self.orddate])
             source = source[(source[self.orddate] <= pd.to_datetime(self.data_range)) & (~source[self.procedure_source_value].str[:1].isin(["L", "P"])) ]
@@ -2734,6 +2734,7 @@ class ProcedureStexmrstTransformer(DataTransformer):
                 "modifier_concept_id": None,
                 "quantity": None,
                 "provider_id": source["provider_id"],
+                "처방의명": source["provider_name"],
                 "visit_occurrence_id": source["visit_occurrence_id"],
                 "visit_detail_id": source["visit_detail_id"],
                 "procedure_source_value": source[self.procedure_source_value],
