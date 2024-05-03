@@ -33,8 +33,11 @@ if __name__ == "__main__":
         measurement_edi = MeasurementEDITransformer(config)    
         measurement_edi.transform()
 
-        measurement_diag = MeasurementDiagTransformer(config)
-        measurement_diag.transform()
+        procedure_edi = ProcedureEDITransformer(config)
+        procedure_edi.transform()
+
+        # measurement_diag = MeasurementDiagTransformer(config)
+        # measurement_diag.transform()
 
         measurement_pth = MeasurementpthTransformer(config)
         measurement_pth.transform()
@@ -47,9 +50,6 @@ if __name__ == "__main__":
 
         merge_measurement = MergeMeasurementTransformer(config)
         merge_measurement.transform()
-
-        procedure_edi = ProcedureEDITransformer(config)
-        procedure_edi.transform()
 
         procedure_pacs = ProcedurePACSTransformer(config)
         procedure_pacs.transform()

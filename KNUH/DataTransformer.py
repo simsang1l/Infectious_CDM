@@ -38,7 +38,7 @@ class DataTransformer:
         self.concept_unit = self.config["concept_unit"]
         self.hospital = self.config["hospital"]
         self.drug_edi_data = self.config["drug_edi_data"]
-        self.sugacode = self.config["sugacode"]
+        # self.sugacode = self.config["sugacode"]
         self.edicode = self.config["edicode"]
         self.fromdate = self.config["fromdate"]
         self.todate = self.config["todate"]
@@ -464,9 +464,10 @@ class VisitOccurrenceTransformer(DataTransformer):
 
             # 원천 데이터 범위 설정
             source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.meddate] + source[self.visit_no] + source[self.hospital]
+            source["visit_start_datetime"] = source[self.meddate] + source[self.medtime]
             source[self.meddate] = pd.to_datetime(source[self.meddate])
             source = source[source[self.meddate] <= self.data_range]
-            logging.debug(f"데이터 범위 조건 적용 후 원천 데이터 row수: {len(source)}")
+            logging.debug(f"데이터1 범위 조건 적용 후 원천 데이터 row수: {len(source)}")
 
             # 불러온 원천 전처리
             source = pd.merge(source, person_data, left_on = self.person_source_value, right_on="person_source_value", how="left")
@@ -486,9 +487,10 @@ class VisitOccurrenceTransformer(DataTransformer):
 
             # 원천 데이터2 범위 설정
             source2["visit_source_key"] = source2[self.person_source_value] + source2[self.meddept] + source2[self.admdate] + source2[self.visit_no] + source2[self.hospital]
+            source2["visit_start_datetime"] = source2[self.admdate] + source2[self.admtime]
             source2[self.admdate] = pd.to_datetime(source2[self.admdate])
             source2 = source2[source2[self.admdate] <= self.data_range]
-            logging.debug(f"데이터 범위 조건 적용 후 원천 데이터2 row수: {len(source2)}")
+            logging.debug(f"데이터2 범위 조건 적용 후 원천 데이터2 row수: {len(source2)}")
 
             # 불러온 원천2 전처리    
             source2 = pd.merge(source2, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
@@ -525,9 +527,9 @@ class VisitOccurrenceTransformer(DataTransformer):
                 "환자명": source["환자명"],
                 "visit_concept_id": np.select([source[self.visit_source_value] == "O"], [9202], default = 0),
                 "visit_start_date": source[self.meddate],
-                "visit_start_datetime": pd.to_datetime(source[self.meddate] + source[self.medtime], format="%Y%m%d%H%M%S"),
+                "visit_start_datetime": pd.to_datetime(source["visit_start_datetime"], format="%Y%m%d%H%M%S"),
                 "visit_end_date": source[self.meddate],
-                "visit_end_datetime": pd.to_datetime(source[self.meddate] + source[self.medtime], format="%Y%m%d%H%M%S"),
+                "visit_end_datetime": pd.to_datetime(source["visit_start_datetime"], format="%Y%m%d%H%M%S"),
                 "visit_type_concept_id": np.select([source[self.meddept] == "CTC"], [44818519], default = 44818518),
                 "visit_type_concept_id_name": source["concept_name"],
                 "provider_id": 0,
@@ -555,7 +557,7 @@ class VisitOccurrenceTransformer(DataTransformer):
                 "환자명": source2["환자명"],
                 "visit_concept_id": np.select(visit_condition, visit_concept_id, default = 0),
                 "visit_start_date": source2[self.admdate],
-                "visit_start_datetime": pd.to_datetime(source2[self.admdate] + source2[self.admtime], format="%Y%m%d%H%M%S"),
+                "visit_start_datetime": pd.to_datetime(source2["visit_start_datetime"], format="%Y%m%d%H%M%S"),
                 "visit_end_date": pd.to_datetime(source2[self.dschdate], format="%Y%m%d"),
                 "visit_end_datetime": (source2[self.dschdate] + source2[self.dschtime]).apply(lambda x: datetime.strptime(x, '%Y%m%d%H%M%S')),
                 "visit_type_concept_id": np.select([source2[self.meddept] == "CTC"], [44818519], default = 44818518),
@@ -1076,14 +1078,19 @@ class MeasurementEDITransformer(DataTransformer):
         self.cdm_config = self.config[self.table]
 
         # 컬럼 변수 재정의      
-        # self.order_data = self.cdm_config["data"]["order_data"]
+        self.order_data = self.cdm_config["data"]["order_data"]
         self.edi_data = self.cdm_config["data"]["edi_data"]
         self.concept_data = self.cdm_config["data"]["concept_data"]
         self.output_filename = self.cdm_config["data"]["output_filename"]
 
         self.ordercode = self.cdm_config["columns"]["ordercode"]
+        self.sugacode = self.cdm_config["columns"]["sugacode"]
         self.ordnm = self.cdm_config["columns"]["ordnm"]
-        self.tclsnm = self.cdm_config["columns"]["tclsnm"]        
+        self.tclsnm = self.cdm_config["columns"]["tclsnm"]
+        self.fromdd = self.cdm_config["columns"]["fromdd"]
+        self.todd = self.cdm_config["columns"]["todd"]
+        self.order_fromdate = self.cdm_config["columns"]["order_fromdate"]
+        self.order_todate = self.cdm_config["columns"]["order_todate"]
         
     def transform(self):
         """
@@ -1107,20 +1114,20 @@ class MeasurementEDITransformer(DataTransformer):
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
         """
         try : 
-            # order_data = self.read_csv(self.order_data, path_type = self.source_flag, dtype = self.source_dtype)
+            order_data = self.read_csv(self.order_data, path_type = self.source_flag, dtype = self.source_dtype)
             edi_data = self.read_csv(self.edi_data, path_type = self.source_flag, dtype = self.source_dtype)
             concept_data = self.read_csv(self.concept_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            # logging.debug(f'원천 데이터 row수: order: {len(order_data)}, edi: {len(edi_data)}')
-            logging.debug(f'원천 데이터 row수: order: edi: {len(edi_data)}')
+            logging.debug(f'원천 데이터 row수: order: {len(order_data)}, edi: {len(edi_data)}')
             
-            source = edi_data
             # 처방코드 마스터와 수가코드 매핑
-            # source = pd.merge(order_data, edi_data, left_on=[self.ordercode, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
-            # logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
+            source = pd.merge(order_data, edi_data, left_on=[self.ordercode, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
+            logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
 
-            # null값에 fromdate, todate 설정
-            source[self.fromdate].fillna("19000101")
-            source[self.todate].fillna("20991231")
+            # # null값에 fromdate, todate 설정
+            # source[self.order_fromdate].fillna("19000101")
+            # source[self.order_todate].fillna("20991231")
+            # source[self.fromdate].fillna("19000101")
+            # source[self.todate].fillna("20991231")
 
             concept_data = concept_data.sort_values(by = ["vocabulary_id"], ascending=[False])
             concept_data['Sequence'] = concept_data.groupby(["concept_code"]).cumcount() + 1
@@ -1129,6 +1136,10 @@ class MeasurementEDITransformer(DataTransformer):
             # concept_id 매핑
             source = pd.merge(source, concept_data, left_on=self.edicode, right_on="concept_code", how="left")
             logging.debug(f'concept merge후 데이터 row수: {len(source)}')
+
+            source[self.fromdate] = source[self.order_fromdate].where(source[self.fromdd].notna(), source[self.fromdd])
+            source[self.todate] = source[self.order_todate].where(source[self.todd].notna(), source[self.todd])
+
 
             # drug의 경우 KCD, EDI 순으로 매핑
             logging.debug(f'중복되는 concept_id 제거 후 데이터 row수: {len(source)}')
@@ -1171,7 +1182,7 @@ class MeasurementDiagTransformer(DataTransformer):
         self.unit_source_value = self.cdm_config["columns"]["unit_source_value"]
         self.ordcode = self.cdm_config["columns"]["ordcode"]
         self.orddd = self.cdm_config["columns"]["orddd"]
-        self.unit_source_value = self.cdm_config["columns"]["unit_source_value"]
+        self.spccd = self.cdm_config["columns"]["spccd"]
                 
     def transform(self):
         """
@@ -1226,7 +1237,7 @@ class MeasurementDiagTransformer(DataTransformer):
             source3[self.orddate] = pd.to_datetime(source3[self.orddate])
             source3 = source3[(source3[self.orddate] <= self.data_range)]
 
-            source4 = source4[[self.hospital, "BCNO", "TCLSCD", "SPCCD", "RSLTFLAG", self.measurement_source_value, self.measurement_date, self.range_low, self.range_high, self.value_source_value, "RSLTSTAT"]]
+            source4 = source4[[self.hospital, "BCNO", "TCLSCD", self.spccd, "RSLTFLAG", self.measurement_source_value, self.measurement_date, self.range_low, self.range_high, self.value_source_value, "RSLTSTAT"]]
             source4 = source4[(source4["RSLTFLAG"] == "O") & (source4["RSLTSTAT"].isin(["4", "5"]))]
 
             logging.debug(f'조건적용 후 원천 데이터 row수: {len(source1)}, {len(source2)}, {len(source3)}, {len(source4)}')
@@ -1239,7 +1250,7 @@ class MeasurementDiagTransformer(DataTransformer):
             source = pd.merge(source, source3, left_on=[self.hospital, self.orddate, "EXECPRCPUNIQNO"], right_on=[self.hospital, self.orddate, "EXECPRCPUNIQNO"], how="inner", suffixes=("", "_diag3"))
             logging.debug(f'source, source3 병합 후 데이터 개수:, {len(source)}')
 
-            source = pd.merge(source, source4, left_on=[self.hospital, "BCNO", "TCLSCD", "SPCCD"], right_on=[self.hospital, "BCNO", "TCLSCD", "SPCCD"], how="inner", suffixes=("", "_diag4"))
+            source = pd.merge(source, source4, left_on=[self.hospital, "BCNO", "TCLSCD", self.spccd], right_on=[self.hospital, "BCNO", "TCLSCD", self.spccd], how="inner", suffixes=("", "_diag4"))
             logging.debug(f'source, source4 병합 후 데이터 개수:, {len(source)}')
             del source3
             del source4
@@ -1257,13 +1268,17 @@ class MeasurementDiagTransformer(DataTransformer):
             source[self.range_high].astype(float)
 
             # local_edi 전처리
-            local_edi = local_edi[[self.sugacode, self.fromdate, self.todate, self.edicode, "concept_id", self.hospital, "ORDNM"]]
+            local_edi = local_edi[[self.ordcode, self.fromdate, self.todate, self.edicode, "concept_id", self.hospital, "ORDNM", self.spccd]]
             local_edi[self.fromdate] = pd.to_datetime(local_edi[self.fromdate] , format="%Y%m%d", errors="coerce")
             local_edi[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
             local_edi[self.todate] = pd.to_datetime(local_edi[self.todate] , format="%Y%m%d", errors="coerce")
             local_edi[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
 
-            source = pd.merge(source, local_edi, left_on=[self.measurement_source_value, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
+            source = pd.merge(source, local_edi, left_on=[self.measurement_source_value, self.spccd, self.hospital], right_on=[self.ordcode, self.spccd, self.hospital], how="left", suffixes=('', '_testcd'))
+            source = source[(source[self.orddate] >= source[self.fromdate]) & (source[self.orddate] <= source[self.todate])]
+            logging.debug(f"EDI코드 사용기간별 필터 적용 후 데이터 row수: {len(source)}")
+            source = pd.merge(source, local_edi, left_on=[self.ordcode, self.spccd, self.hospital], right_on=[self.ordcode, self.spccd, self.hospital], how="left", suffixes=('', '_order'))
+            source = source[(source[self.orddate] >= source[self.fromdate]) & (source[self.orddate] <= source[self.todate])]
             del local_edi
             logging.debug(f'EDI코드 테이블과 병합 후 데이터 row수:, {len(source)}')
     
@@ -1429,7 +1444,7 @@ class MeasurementDiagTransformer(DataTransformer):
                 "vocabulary_id": "EDI",
                 "visit_source_key": source["visit_source_key"],
                 "처방코드": source[self.ordcode],
-                "처방명": source["ORDNM"],
+                "처방명": source["ORDNM_order"],
                 "환자구분": source["visit_source_value"],
                 "진료과": source[self.meddept],
                 "진료과명": source["care_site_name"],
@@ -1473,6 +1488,7 @@ class MeasurementpthTransformer(DataTransformer):
         self.range_high = self.cdm_config["columns"]["range_high"]
         self.orddd = self.cdm_config["columns"]["orddd"]
         self.unit_source_value = self.cdm_config["columns"]["unit_source_value"]
+        self.ordcode = self.cdm_config["columns"]["ordcode"]
                 
     def transform(self):
         """
@@ -1502,7 +1518,7 @@ class MeasurementpthTransformer(DataTransformer):
             source2 = self.read_csv(self.source_data2, path_type = self.source_flag, dtype = self.source_dtype)
             source3 = self.read_csv(self.source_data3, path_type = self.source_flag, dtype = self.source_dtype)
             source4 = self.read_csv(self.source_data4, path_type = self.source_flag, dtype = self.source_dtype)
-            local_edi = self.read_csv(self.measurement_edi_data, path_type = self.cdm_flag, dtype = self.source_dtype)
+            local_edi = self.read_csv(self.procedure_edi_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
@@ -1548,13 +1564,13 @@ class MeasurementpthTransformer(DataTransformer):
             source[self.measurement_date] = pd.to_datetime(source[self.measurement_date])
 
             # local_edi 전처리
-            local_edi = local_edi[[self.sugacode, self.fromdate, self.todate, self.edicode, "concept_id", self.hospital, "ORDNM"]]
+            local_edi = local_edi[[self.ordcode, self.fromdate, self.todate, self.edicode, "concept_id", self.hospital, "ORDNM"]]
             local_edi[self.fromdate] = pd.to_datetime(local_edi[self.fromdate] , format="%Y%m%d", errors="coerce")
             local_edi[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
             local_edi[self.todate] = pd.to_datetime(local_edi[self.todate] , format="%Y%m%d", errors="coerce")
             local_edi[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
 
-            source = pd.merge(source, local_edi, left_on=[self.measurement_source_value, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
+            source = pd.merge(source, local_edi, left_on=[self.measurement_source_value, self.hospital], right_on=[self.ordcode, self.hospital], how="left")
             del local_edi
             logging.debug(f'EDI코드 테이블과 병합 후 데이터 row수:, {len(source)}')
     
@@ -2575,8 +2591,8 @@ class ProcedureEDITransformer(DataTransformer):
         self.ordercode = self.cdm_config["columns"]["ordercode"]
         self.sugacode = self.cdm_config["columns"]["sugacode"]
         self.edicode = self.cdm_config["columns"]["edicode"]
-        self.fromdate = self.cdm_config["columns"]["fromdate"]
-        self.todate = self.cdm_config["columns"]["todate"]
+        self.fromdd = self.cdm_config["columns"]["fromdd"]
+        self.todd = self.cdm_config["columns"]["todd"]
         self.ordnm = self.cdm_config["columns"]["ordnm"]
             
         
@@ -2612,10 +2628,10 @@ class ProcedureEDITransformer(DataTransformer):
             logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
 
             # null값에 fromdate, todate 설정
-            source["FROMDD_x"].fillna("19000101")
-            source["TODD_x"].fillna("20991231")
-            source[self.fromdate] = source["FROMDD_x"].where(source["FROMDD_y"].notna(), source["FROMDD_x"])
-            source[self.todate] = source["TODD_y"].where(source["TODD_y"].notna(), source["TODD_x"])
+            # source["FROMDD_x"].fillna("19000101")
+            # source["TODD_x"].fillna("20991231")
+            source[self.fromdate] = source["FROMDD_x"].where(source["FROMDD_y"].notna(), source["FROMDD_y"])
+            source[self.todate] = source["TODD_y"].where(source["TODD_y"].notna(), source["TODD_y"])
 
             concept_data = concept_data.sort_values(by = ["vocabulary_id"], ascending=[False])
             concept_data['Sequence'] = concept_data.groupby(["concept_code"]).cumcount() + 1
@@ -2624,7 +2640,6 @@ class ProcedureEDITransformer(DataTransformer):
             # concept_id 매핑
             source = pd.merge(source, concept_data, left_on=self.edicode, right_on="concept_code", how="left")
             logging.debug(f'concept merge후 데이터 row수: {len(source)}')
-
 
             # local_edi = source[[self.ordercode, self.fromdate, self.todate, self.edicode, self.hospital,
             #                      "concept_id", "concept_name", "domain_id", "vocabulary_id", "concept_class_id", 
@@ -2741,14 +2756,14 @@ class ProcedurePACSTransformer(DataTransformer):
             source[self.readtext] = source[self.readtext].astype(str)
             source[self.conclusion] = source[self.conclusion].astype(str)
     
-            procedure_edi = procedure_edi[["PRCPCD", self.fromdate, self.todate, self.edicode, "concept_id", self.hospital, "ORDNM"]]
+            procedure_edi = procedure_edi[[self.procedure_source_value, self.fromdate, self.todate, self.edicode, "concept_id", self.hospital, "ORDNM"]]
             procedure_edi[self.fromdate] = pd.to_datetime(procedure_edi[self.fromdate], errors="coerce")
             procedure_edi[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
             procedure_edi[self.todate] = pd.to_datetime(procedure_edi[self.todate], errors="coerce")
             procedure_edi[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
 
             # LOCAL코드와 EDI코드 매핑 테이블과 병합
-            source = pd.merge(source, procedure_edi, left_on=[self.procedure_source_value, self.hospital], right_on=["PRCPCD", self.hospital], how="left")
+            source = pd.merge(source, procedure_edi, left_on=[self.procedure_source_value, self.hospital], right_on=[self.procedure_source_value, self.hospital], how="left")
             logging.debug(f'local_edi 테이블과 결합 후 데이터 row수: {len(source)}')
             source = source[(source[self.orddate] >= source[self.fromdate]) & (source[self.orddate] <= source[self.todate])]
             logging.debug(f"local_edi 사용기간별 필터 적용 후 데이터 row수: {len(source)}")
@@ -2903,14 +2918,14 @@ class ProcedureBaseOrderTransformer(DataTransformer):
             logging.debug(f"조건적용 후 원천 데이터 row수:{len(source)}")
 
 
-            procedure_edi = procedure_edi[["PRCPCD", self.fromdate, self.todate, self.edicode, "concept_id", self.hospital, "ORDNM"]]
+            procedure_edi = procedure_edi[[self.procedure_source_value, self.fromdate, self.todate, self.edicode, "concept_id", self.hospital, "ORDNM"]]
             procedure_edi[self.fromdate] = pd.to_datetime(procedure_edi[self.fromdate], errors="coerce")
             procedure_edi[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
             procedure_edi[self.todate] = pd.to_datetime(procedure_edi[self.todate], errors="coerce")
             procedure_edi[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
 
             # LOCAL코드와 EDI코드 매핑 테이블과 병합
-            source = pd.merge(source, procedure_edi, left_on=[self.procedure_source_value, self.hospital], right_on=["PRCPCD", self.hospital], how="left")
+            source = pd.merge(source, procedure_edi, left_on=[self.procedure_source_value, self.hospital], right_on=[self.procedure_source_value, self.hospital], how="left")
             logging.debug(f'local_edi 테이블과 결합 후 데이터 row수: {len(source)}')
             source = source[(source[self.procedure_date] >= source[self.fromdate]) & (source[self.procedure_date] <= source[self.todate])]
             logging.debug(f"local_edi 사용기간별 필터 적용 후 데이터 row수: {len(source)}")
@@ -3072,14 +3087,14 @@ class ProcedureBldOrderTransformer(DataTransformer):
             logging.debug(f"조건적용 후 원천 데이터 row수:{len(source)}")
 
 
-            procedure_edi = procedure_edi[["PRCPCD", self.fromdate, self.todate, self.edicode, "concept_id", self.hospital, "ORDNM"]]
+            procedure_edi = procedure_edi[[self.procedure_source_value, self.fromdate, self.todate, self.edicode, "concept_id", self.hospital, "ORDNM"]]
             procedure_edi[self.fromdate] = pd.to_datetime(procedure_edi[self.fromdate], errors="coerce")
             procedure_edi[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
             procedure_edi[self.todate] = pd.to_datetime(procedure_edi[self.todate], errors="coerce")
             procedure_edi[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
 
             # LOCAL코드와 EDI코드 매핑 테이블과 병합
-            source = pd.merge(source, procedure_edi, left_on=[self.procedure_source_value, self.hospital], right_on=["PRCPCD", self.hospital], how="left")
+            source = pd.merge(source, procedure_edi, left_on=[self.procedure_source_value, self.hospital], right_on=[self.procedure_source_value, self.hospital], how="left")
             logging.debug(f'local_edi 테이블과 결합 후 데이터 row수: {len(source)}')
             source = source[(source[self.procedure_date] >= source[self.fromdate]) & (source[self.procedure_date] <= source[self.todate])]
             logging.debug(f"local_edi 사용기간별 필터 적용 후 데이터 row수: {len(source)}")

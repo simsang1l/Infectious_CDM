@@ -19,10 +19,9 @@ concept_etc: "concept_etc"
 unit_concept_synonym: unit_concept_synonym
 hospital: "INSTCD"
 drug_edi_data: "drug_edi"
-sugacode: "CALCSCORCD"
 edicode: "INSUEDICD"
-fromdate: "FROMDD"
-todate: "TODD"
+fromdate: "FROMDATE"
+todate: "TODATE"
 visit_no: "CRETNO"
 
 care_site:
@@ -132,6 +131,21 @@ drug_exposure:
     dose_unit_source_value: "PRCPQTYUNITFLAG"
     orddd: "ORDDD"
 
+local_edi:
+  data:
+    order_data: "23.LLFMTCLS_검체검사"
+    edi_data: "17.PICMMECH_수가마스터"
+    concept_data: "concept_EDI_KDC"
+    output_filename: "local_edi"
+  columns:
+    ordercode: "TCLSCD"
+    sugacode: "CALCSCORCD"
+    edicode: "INSUEDICD"
+    fromdate: "FROMDD"
+    todate: "TODD"
+    engnm: "ENGNM"
+    tclsnm: "TCLSNM"
+
 measurement_edi:
   data:
     order_data: "23.LLFMTCLS_검체검사"
@@ -142,8 +156,10 @@ measurement_edi:
     ordercode: "TCLSCD"
     sugacode: "CALCSCORCD"
     edicode: "INSUEDICD"
-    fromdate: "FROMDD"
-    todate: "TODD"
+    fromdd: "FROMDD"
+    todd: "TODD"
+    order_fromdate: "TCLSCDFROMDD"
+    order_todate: "TCLSTODD"
     ordnm: "ORDNM"
     tclsnm: "TCLSNM"
 
@@ -166,6 +182,7 @@ measurement_diag:
     range_high: "REFH"
     ordcode: "TCLSCD"
     orddd: "ORDDD"
+    spccd: "SPCCD"
 
 measurement_pth:
   data:
@@ -185,6 +202,7 @@ measurement_pth:
     range_high: null
     unit_source_value: null
     orddd: "ORDDD"
+    ordcode: "PRCPCD"
 
 
 measurement_ni:
@@ -234,8 +252,8 @@ procedure_edi:
     ordercode: "PRCPCD"
     sugacode: "CALCSCORCD"
     edicode: "INSUEDICD"
-    fromdate: "FROMDD"
-    todate: "TODD"
+    fromdd: "FROMDD"
+    todd: "TODD"
     ordnm: "ORDNM"
 
 
