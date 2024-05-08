@@ -463,9 +463,9 @@ class VisitOccurrenceTransformer(DataTransformer):
             logging.debug(f"원천 데이터 row수: source: {len(source)}, source2: {len(source2)}")
 
             # 원천 데이터 범위 설정
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.meddate] + source[self.visit_no] + source[self.hospital]
             source["visit_start_datetime"] = source[self.meddate] + source[self.medtime]
             source[self.meddate] = pd.to_datetime(source[self.meddate])
+            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.meddate].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
             source = source[source[self.meddate] <= self.data_range]
             logging.debug(f"데이터1 범위 조건 적용 후 원천 데이터 row수: {len(source)}")
 
@@ -486,9 +486,9 @@ class VisitOccurrenceTransformer(DataTransformer):
             source = pd.merge(source, concept_etc, left_on = "visit_type_concept_id", right_on="concept_id", how="left")
 
             # 원천 데이터2 범위 설정
-            source2["visit_source_key"] = source2[self.person_source_value] + source2[self.meddept] + source2[self.admdate] + source2[self.visit_no] + source2[self.hospital]
             source2["visit_start_datetime"] = source2[self.admdate] + source2[self.admtime]
             source2[self.admdate] = pd.to_datetime(source2[self.admdate])
+            source2["visit_source_key"] = source2[self.person_source_value] + source2[self.meddept] + source2[self.admdate].dt.strftime("%Y%m%d") + source2[self.visit_no] + source2[self.hospital]
             source2 = source2[source2[self.admdate] <= self.data_range]
             logging.debug(f"데이터2 범위 조건 적용 후 원천 데이터2 row수: {len(source2)}")
 
@@ -644,12 +644,11 @@ class ConditionOccurrenceTransformer(DataTransformer):
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             logging.debug(f"원천 데이터 row수: {len(source)}")
 
-            # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd] + source[self.visit_no] + source[self.hospital]
-
             # 원천에서 조건걸기
             source[self.condition_start_datetime] = pd.to_datetime(source[self.condition_start_datetime], format="%Y%m%d")
             source[self.orddd] = pd.to_datetime(source[self.orddd])
+            # visit_source_key 생성
+            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
             source = source[source[self.condition_start_datetime] <= self.data_range]
             source = source[source[self.condition_start_datetime].notna()]
             logging.debug(f"조건 적용후 원천 데이터 row수: {len(source)}")
@@ -874,11 +873,11 @@ class DrugexposureTransformer(DataTransformer):
             source = source[[self.person_source_value, self.drug_source_value, self.drug_exposure_start_datetime,
                              self.meddept, self.days_supply, self.qty, self.cnt, self.provider,
                              self.dose_unit_source_value, self.hospital, self.route_source_value, self.orddd, self.visit_no]]
-            # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd] + source[self.visit_no] + source[self.hospital]
 
             source[self.drug_exposure_start_datetime] = pd.to_datetime(source[self.drug_exposure_start_datetime])
             source[self.orddd] = pd.to_datetime(source[self.orddd])
+            # visit_source_key 생성
+            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
             source = source[(source[self.drug_exposure_start_datetime] <= self.data_range)]
             
 
@@ -1256,7 +1255,8 @@ class MeasurementDiagTransformer(DataTransformer):
             del source4
 
             # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd] + source[self.visit_no] + source[self.hospital]
+            source[self.orddd] = pd.to_datetime(source[self.orddd])
+            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
             source[self.measurement_date] = pd.to_datetime(source[self.measurement_date])
 
             # value_as_number float형태로 저장되게 값 변경
@@ -1303,7 +1303,7 @@ class MeasurementDiagTransformer(DataTransformer):
             logging.debug(f'provider 테이블과 결합 후 데이터 row수: {len(source)}')
 
             # visit_start_datetime 형태 변경
-            source["ORDDD"] = pd.to_datetime(source["ORDDD"])
+            # source["ORDDD"] = pd.to_datetime(source["ORDDD"])
             visit_data["visit_start_date"] = pd.to_datetime(visit_data["visit_start_date"])
 
             # visit_occurrence table과 병합
@@ -1560,7 +1560,8 @@ class MeasurementpthTransformer(DataTransformer):
             del source4
 
             # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd] + source[self.visit_no] + source[self.hospital]
+            source[self.orddd] = pd.to_datetime(source[self.orddd])
+            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
             source[self.measurement_date] = pd.to_datetime(source[self.measurement_date])
 
             # local_edi 전처리
@@ -2750,7 +2751,8 @@ class ProcedurePACSTransformer(DataTransformer):
             del source3
             logging.debug(f"검사처방, 처방상세, 영상검사결과 결합 후 데이터 수: {len(source)}")
             
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd] + source[self.visit_no] + source[self.hospital]
+            source[self.orddd] = pd.to_datetime(source[self.orddd])
+            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
             source["procedure_datetime"] = source["CONFDATE"] + source["CONFTIME"]
             source["procedure_datetime"] = pd.to_datetime(source["procedure_datetime"])
             source[self.readtext] = source[self.readtext].astype(str)
@@ -2910,10 +2912,11 @@ class ProcedureBaseOrderTransformer(DataTransformer):
             
             source = source[[self.hospital, self.procedure_date, self.person_source_value, self.meddept,
                              self.orddd,self.ordname, self.procedure_source_value, self.provider, self.visit_no]]
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd] + source[self.visit_no] + source[self.hospital]
+            
             source["처방일"] = source[self.procedure_date]
             source[self.procedure_date] = pd.to_datetime(source[self.procedure_date])
             source[self.orddd] = pd.to_datetime(source[self.orddd])
+            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
             source = source[(source[self.procedure_date] <= self.data_range)]
             logging.debug(f"조건적용 후 원천 데이터 row수:{len(source)}")
 
@@ -3079,10 +3082,10 @@ class ProcedureBldOrderTransformer(DataTransformer):
             # 원천에서 조건걸기
             source = source[[self.hospital, self.procedure_date, self.person_source_value, self.meddept,
                              self.orddd, self.ordname, self.procedure_source_value, self.provider, self.visit_no]]
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd] + source[self.visit_no] + source[self.hospital]
             source["처방일"] = source[self.procedure_date]
             source[self.procedure_date] = pd.to_datetime(source[self.procedure_date])
             source[self.orddd] = pd.to_datetime(source[self.orddd])
+            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
             source = source[(source[self.procedure_date] <= self.data_range)]
             logging.debug(f"조건적용 후 원천 데이터 row수:{len(source)}")
 

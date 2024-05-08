@@ -8,7 +8,10 @@ python으로 작성되어 있어 python 3.8이상을 추천드립니다.
 ----
 
 ## 실행 가이드
-config.yaml파일에 변환시 필요한 사용되는 변수를 정의해야 합니다.  
+1. CDM이 저장될 폴더에 `location.csv`, `concept_EDI_KDC.csv`, `concept_etc.csv`, `concept_KCD7.csv`, `concept_unit.csv`, `edi_atc.csv`, `unit_concept_synonym.csv` 파일이 있는지 확인합니다.  
+2. config.yaml파일에 변환시 필요한 사용되는 변수를 정의해야 합니다.  
+3. main.py를 실행합니다.  
+4. 실행완료 후 `log 폴더에 있는 파일`과 QC폴더에 있는 `품질진단지표.xlsx파일`을 전달해주시면 됩니다.  
 
 config.yaml구조
 ```
@@ -36,6 +39,9 @@ config.yaml구조
 `local_edi_data`: local_edi 데이터가 저장된 파일명  
 `person_source_value`: 원천 데이터의 환자등록번호 컬럼명  
 `location_data`: location 데이터가 저장된 파일명  
+`concept_unit`: unit_concept_id가 저장된 파일명  
+`concept_etc`: type_concept_id등 concept_id로 표현하기 위한 값들이 저장된 파일명  
+`unit_concept_synonym`: 동일한 unit_concept_id 매핑을 위한 동의어가 정의된 파일명  
 
 **CDM테이블**  
 
