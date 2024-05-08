@@ -30,41 +30,40 @@ if __name__ == "__main__":
     sheetname_meta = config["sheet_meta"]
 
     ### table 품질 진단 ###
-    # table_person_row_count.person_row_count(config, cdm_path, source_path, excel_path)
-    # table_provider_row_count.provider_row_count(config, cdm_path, source_path, excel_path)
-    # table_visit_occurrence_row_count.visit_occurrence_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
-    # table_visit_detail_row_count.visit_detail_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
-    # table_condition_occurrence_row_count.condition_occurrence_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
-    # table_drug_exposure_row_count.drug_exposure_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
-    # table_measurement_stexmrst_row_count.measurement_stexmrst_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
-    # table_measurement_vs_row_count.measurement_vs_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
-    # table_procedure_order_row_count.procedure_order_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
-    # table_procedure_stexmrst_row_count.procedure_stexmrst_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
+    table_person_row_count.person_row_count(config, cdm_path, source_path, excel_path)
+    table_provider_row_count.provider_row_count(config, cdm_path, source_path, excel_path)
+    table_visit_occurrence_row_count.visit_occurrence_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
+    table_visit_detail_row_count.visit_detail_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
+    table_condition_occurrence_row_count.condition_occurrence_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
+    table_drug_exposure_row_count.drug_exposure_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
+    table_measurement_stexmrst_row_count.measurement_stexmrst_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
+    table_measurement_vs_row_count.measurement_vs_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
+    table_procedure_order_row_count.procedure_order_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
+    table_procedure_stexmrst_row_count.procedure_stexmrst_row_count(config, cdm_path, source_path, excel_path, config_path, sheetname)
 
     ### field 품질 진단 ###
-    # field_care_site_summary.care_site_field_summary(cdm_path, excel_path, sheetname_field)
-    # field_provider_summary.provider_field_summary(cdm_path, excel_path, sheetname_field)
-    # field_person_summary.person_field_summary(cdm_path, excel_path, sheetname_field)
-    # field_visit_occurrence_summary.visit_occurrence_field_summary(cdm_path, excel_path, sheetname_field)
-    # field_visit_detail_summary.visit_detail_field_summary(cdm_path, excel_path, sheetname_field)
-    # field_condition_occurrence_summary.condition_occurrence_field_summary(cdm_path, excel_path, sheetname_field)
-    # field_drug_exposure_summary.drug_exposure_field_summary(cdm_path, excel_path, sheetname_field)
-    # field_measurement_summary.measurement_field_summary(cdm_path, excel_path, sheetname_field)
-    # field_procedure_occurrence_summary.procedure_occurrence_field_summary(cdm_path, excel_path, sheetname_field)
-    # field_observation_period_summary.observation_period_field_summary(cdm_path, excel_path, sheetname_field)
-    # field_local_edi_summary.local_edi_field_summary(cdm_path, excel_path, sheetname_field)
+    field_care_site_summary.care_site_field_summary(cdm_path, excel_path, sheetname_field)
+    field_provider_summary.provider_field_summary(cdm_path, excel_path, sheetname_field)
+    field_person_summary.person_field_summary(cdm_path, excel_path, sheetname_field)
+    field_visit_occurrence_summary.visit_occurrence_field_summary(cdm_path, excel_path, sheetname_field)
+    field_visit_detail_summary.visit_detail_field_summary(cdm_path, excel_path, sheetname_field)
+    field_condition_occurrence_summary.condition_occurrence_field_summary(cdm_path, excel_path, sheetname_field)
+    field_drug_exposure_summary.drug_exposure_field_summary(cdm_path, excel_path, sheetname_field)
+    field_measurement_summary.measurement_field_summary(cdm_path, excel_path, sheetname_field)
+    field_procedure_occurrence_summary.procedure_occurrence_field_summary(cdm_path, excel_path, sheetname_field)
+    field_observation_period_summary.observation_period_field_summary(cdm_path, excel_path, sheetname_field)
+    field_local_edi_summary.local_edi_field_summary(cdm_path, excel_path, sheetname_field)
 
     ### DQ 진단 ###
-    # length = 50
-    # for i in range(length):
-    #     func_name = f"DQ_{str(i+1).zfill(4)}"
-    #     func = globals()[func_name]
-    #     func(cdm_path, excel_path, sheetname_dq)
+    length = get_sheet_row_count(excel_path, sheetname_dq) - 1
+    for i in range(length):
+        func_name = f"DQ_{str(i+1).zfill(4)}"
+        func = globals()[func_name]
+        func(cdm_path, excel_path, sheetname_dq)
 
     ### METADATA 진단 ###
     length = get_sheet_row_count(excel_path, sheetname_meta) - 1
-    print(length)
-    for i in range(23, length):
+    for i in range(length):
         func_name = f"META_{str(i+1).zfill(4)}"
         func = globals()[func_name]
         func(config, cdm_path, excel_path, sheetname_meta)
