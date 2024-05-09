@@ -166,6 +166,9 @@ measurement_stexmrst:
     처방코드: "ORDCODE"
     처방명: "ORDNAME"
     결과내역: RSLTTEXT
+    acptdt: "ACPTDT"
+    readdt: "READDT"
+    reptdt: "REPTDT"
 
 
 measurement_vs:
@@ -234,6 +237,9 @@ procedure_stexmrst:
     conclusion: "CONCLUSION"
     ordcode: "ORDCODE"
     ordname: "ORDNAME"
+    acptdt: "ACPTDT"
+    readdt: "READDT"
+    reptdt: "REPTDT"
 
 merge_procedure:
   data:
