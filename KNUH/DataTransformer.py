@@ -873,7 +873,7 @@ class DrugexposureTransformer(DataTransformer):
             source = source[[self.person_source_value, self.drug_source_value, self.drug_exposure_start_datetime,
                              self.meddept, self.days_supply, self.qty, self.cnt, self.provider,
                              self.dose_unit_source_value, self.hospital, self.route_source_value, self.orddd, self.visit_no]]
-
+            source["진료일시"] = source[self.orddd]
             source[self.drug_exposure_start_datetime] = pd.to_datetime(source[self.drug_exposure_start_datetime])
             source[self.orddd] = pd.to_datetime(source[self.orddd])
             # visit_source_key 생성
@@ -972,6 +972,7 @@ class DrugexposureTransformer(DataTransformer):
             "환자구분": source["visit_source_value"],
             "진료과": source[self.meddept],
             "진료과명": source["care_site_name"],
+            "진료일시": source["진료일시"],
             "나이": None,
             "투여량": source[self.qty],
             "함량단위": source[self.dose_unit_source_value],
@@ -980,7 +981,8 @@ class DrugexposureTransformer(DataTransformer):
             "용법코드": None,
             "처방순번": source[self.visit_no],
             "ATC코드": source["ATC코드"],
-            "ATC 코드명": source["ATC 코드명"]
+            "ATC 코드명": source["ATC 코드명"],
+            "dcyn": None
             })
 
             logging.info(f"CDM테이블 row수: {len(cdm)}")
@@ -1228,7 +1230,7 @@ class MeasurementDiagTransformer(DataTransformer):
             source1 = source1[(source1[self.orddate] <= self.data_range)]
             source1 = source1[(source1["PRCPHISTCD"] == "O") & (source1[self.hospital] == "031") ]
             
-            source2 = source2[[self.hospital, self.orddate, "PRCPNO", "PRCPHISTNO", "EXECPRCPUNIQNO", "ORDDD", self.unit_source_value]]
+            source2 = source2[[self.hospital, self.orddate, "PRCPNO", "PRCPHISTNO", "EXECPRCPUNIQNO", "ORDDD", self.unit_source_value, "EXECDD", "EXECTM"]]
             source2[self.orddate] = pd.to_datetime(source2[self.orddate])
             source2 = source2[(source2[self.orddate] <= self.data_range)]
 
@@ -1236,7 +1238,7 @@ class MeasurementDiagTransformer(DataTransformer):
             source3[self.orddate] = pd.to_datetime(source3[self.orddate])
             source3 = source3[(source3[self.orddate] <= self.data_range)]
 
-            source4 = source4[[self.hospital, "BCNO", "TCLSCD", self.spccd, "RSLTFLAG", self.measurement_source_value, self.measurement_date, self.range_low, self.range_high, self.value_source_value, "RSLTSTAT"]]
+            source4 = source4[[self.hospital, "BCNO", "TCLSCD", self.spccd, "RSLTFLAG", self.measurement_source_value, self.measurement_date, self.range_low, self.range_high, self.value_source_value, "RSLTSTAT", "SPCACPTDT"]]
             source4 = source4[(source4["RSLTFLAG"] == "O") & (source4["RSLTSTAT"].isin(["4", "5"]))]
 
             logging.debug(f'조건적용 후 원천 데이터 row수: {len(source1)}, {len(source2)}, {len(source3)}, {len(source4)}')
@@ -1255,6 +1257,12 @@ class MeasurementDiagTransformer(DataTransformer):
             del source4
 
             # visit_source_key 생성
+            source["진료일시"] = source[self.orddd]
+            source["처방일"] = source[self.orddate]
+            source["보고일시"] = source[self.measurement_date]
+            source["실시일시"] = source["EXECDD"] + source["EXECTM"]
+            source["접수일시"] = source["SPCACPTDT"]
+
             source[self.orddd] = pd.to_datetime(source[self.orddd])
             source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
             source[self.measurement_date] = pd.to_datetime(source[self.measurement_date])
@@ -1421,6 +1429,7 @@ class MeasurementDiagTransformer(DataTransformer):
                 "measurement_date": np.select(measurement_date_condition, measurement_date_value, default=source[self.orddate].dt.date),
                 "measurement_datetime": np.select(measurement_date_condition, measurement_datetime_value, default=source[self.orddate]),
                 "measurement_time": np.select(measurement_date_condition, measurement_time_value, default=source[self.orddate].dt.time),
+                "measurement_date_type": np.select(measurement_date_condition, ["보고일"], default="처방일"),
                 "measurement_type_concept_id": source["measurement_type_concept_id"],
                 "measurement_type_concept_id_name": source["concept_name_measurement_type"],
                 "operator_concept_id": source["operator_concept_id"],
@@ -1448,7 +1457,12 @@ class MeasurementDiagTransformer(DataTransformer):
                 "환자구분": source["visit_source_value"],
                 "진료과": source[self.meddept],
                 "진료과명": source["care_site_name"],
-                "처방일": source[self.orddate],
+                "처방일": source["처방일"],
+                "진료일시": source["진료일시"],
+                "접수일시": source["접수일시"],
+                "실시일시": source["실시일시"],
+                "판독일시": None,
+                "보고일시": source["보고일시"],
                 "처방순번": source[self.visit_no],
                 "정상치(상)": source[self.range_high],
                 "정상치(하)": source[self.range_low],
@@ -1534,7 +1548,7 @@ class MeasurementpthTransformer(DataTransformer):
             
             source2 = source2[[self.hospital, self.person_source_value, "PTNO", "RSLTRGSTDD", "RSLTRGSTNO", "RSLTRGSTHISTNO", self.value_source_value]]
 
-            source3 = source3[[self.hospital, "PTNO", "PRCPDD", "PRCPNO", "ACPTSTATCD", self.measurement_source_value, "SPCCD"]]
+            source3 = source3[[self.hospital, "PTNO", "PRCPDD", "PRCPNO", "ACPTSTATCD", self.measurement_source_value, "SPCCD", "SPCACPTDD", "READDD", "READTM", "ACPTDD", "ACPTTM"]]
             source3[self.orddate] = pd.to_datetime(source3[self.orddate])
             source3 = source3[(source3[self.orddate] <= self.data_range)]
             source3 = source3[source3["ACPTSTATCD"].isin(["3", "4"])]
@@ -1560,6 +1574,13 @@ class MeasurementpthTransformer(DataTransformer):
             del source4
 
             # visit_source_key 생성
+            source["처방일"] = source[self.orddate]
+            source["진료일시"] = source[self.orddd]
+            source["접수일시"] = source["SPCACPTDD"]
+            source["실시일시"] = source["ACPTDD"] + source["ACPTTM"]
+            source["판독일시"] = source["READDD"] + source["READTM"]
+            source["보고일시"] = source[self.measurement_date]
+
             source[self.orddd] = pd.to_datetime(source[self.orddd])
             source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
             source[self.measurement_date] = pd.to_datetime(source[self.measurement_date])
@@ -1713,6 +1734,7 @@ class MeasurementpthTransformer(DataTransformer):
                 "measurement_date": np.select(measurement_date_condition, measurement_date_value, default=source[self.orddate].dt.date),
                 "measurement_datetime": np.select(measurement_date_condition, measurement_datetime_value, default=source[self.orddate]),
                 "measurement_time": np.select(measurement_date_condition, measurement_time_value, default=source[self.orddate].dt.time),
+                "measurement_date_type": np.select(measurement_date_condition, ["결과등록일자"], default="처방일"),
                 "measurement_type_concept_id": source["measurement_type_concept_id"],
                 "measurement_type_concept_id_name": source["concept_name"], #source["concept_name_measurement_type"],
                 "operator_concept_id": source["operator_concept_id"],
@@ -1740,7 +1762,12 @@ class MeasurementpthTransformer(DataTransformer):
                 "환자구분": source["visit_source_value"],
                 "진료과": source[self.meddept],
                 "진료과명": source["care_site_name"],
-                "처방일": source[self.orddate],
+                "처방일": source["처방일"],
+                "진료일시": source["진료일시"],
+                "접수일시": source["접수일시"],
+                "실시일시": source["실시일시"],
+                "판독일시": source["판독일시"],
+                "보고일시": source["보고일시"],
                 "처방순번": source[self.visit_no],
                 "정상치(상)": self.range_high,
                 "정상치(하)": self.range_low,
@@ -1879,7 +1906,8 @@ class MeasurementVSTransformer(DataTransformer):
                 "measurement_concept_id": None,
                 "measurement_date": source[self.measurement_date].dt.date,
                 "measurement_datetime": source[self.measurement_date],
-                "measurement_time": source[self.measurement_date].dt.time, 
+                "measurement_time": source[self.measurement_date].dt.time,
+                "measurement_date_type": "기록일시", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source["concept_name"],
                 "operator_concept_id": 0,
@@ -1905,7 +1933,12 @@ class MeasurementVSTransformer(DataTransformer):
                 "환자구분": source["visit_source_value"],
                 "진료과": None,
                 "진료과명": None,
-                "처방일": source[self.orddd],
+                "처방일": None,
+                "진료일시": source[self.orddd],
+                "접수일시": None,
+                "실시일시": None,
+                "판독일시": None,
+                "보고일시": None,
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
@@ -2114,7 +2147,8 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_concept_id": measurement_concept["weight"][0],
                 "measurement_date": source_weight[self.admtime].dt.date,
                 "measurement_datetime": source_weight[self.admtime],
-                "measurement_time": source_weight[self.admtime].dt.time, 
+                "measurement_time": source_weight[self.admtime].dt.time,
+                "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_weight["concept_name"],
                 "operator_concept_id": 0,
@@ -2143,6 +2177,11 @@ class MeasurementNITransformer(DataTransformer):
                 "진료과": None,
                 "진료과명": None,
                 "처방일": None,
+                "진료일시": None,
+                "접수일시": None,
+                "실시일시": None,
+                "판독일시": None,
+                "보고일시": None,
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
@@ -2159,6 +2198,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_height[self.admtime].dt.date,
                 "measurement_datetime": source_height[self.admtime],
                 "measurement_time": source_height[self.admtime].dt.time, 
+                "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_height["concept_name"],
                 "operator_concept_id": 0,
@@ -2187,6 +2227,11 @@ class MeasurementNITransformer(DataTransformer):
                 "진료과": None,
                 "진료과명": None,
                 "처방일": None,
+                "진료일시": None,
+                "접수일시": None,
+                "실시일시": None,
+                "판독일시": None,
+                "보고일시": None,
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
@@ -2203,6 +2248,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_bmi[self.admtime].dt.date,
                 "measurement_datetime": source_bmi[self.admtime],
                 "measurement_time": source_bmi[self.admtime].dt.time, 
+                "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_bmi["concept_name"],
                 "operator_concept_id": None,
@@ -2231,6 +2277,11 @@ class MeasurementNITransformer(DataTransformer):
                 "진료과": None,
                 "진료과명": None,
                 "처방일": None,
+                "진료일시": None,
+                "접수일시": None,
+                "실시일시": None,
+                "판독일시": None,
+                "보고일시": None,
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
@@ -2246,6 +2297,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_sbp[self.admtime].dt.date,
                 "measurement_datetime": source_sbp[self.admtime],
                 "measurement_time": source_sbp[self.admtime].dt.time, 
+                "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_sbp["concept_name"],
                 "operator_concept_id": None,
@@ -2274,6 +2326,11 @@ class MeasurementNITransformer(DataTransformer):
                 "진료과": None,
                 "진료과명": None,
                 "처방일": None,
+                "진료일시": None,
+                "접수일시": None,
+                "실시일시": None,
+                "판독일시": None,
+                "보고일시": None,
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
@@ -2289,6 +2346,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_dbp[self.admtime].dt.date,
                 "measurement_datetime": source_dbp[self.admtime],
                 "measurement_time": source_dbp[self.admtime].dt.time, 
+                "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_dbp["concept_name"],
                 "operator_concept_id": None,
@@ -2315,6 +2373,11 @@ class MeasurementNITransformer(DataTransformer):
                 "진료과": None,
                 "진료과명": None,
                 "처방일": None,
+                "진료일시": None,
+                "접수일시": None,
+                "실시일시": None,
+                "판독일시": None,
+                "보고일시": None,
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
@@ -2330,6 +2393,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_pulse[self.admtime].dt.date,
                 "measurement_datetime": source_pulse[self.admtime],
                 "measurement_time": source_pulse[self.admtime].dt.time, 
+                "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_pulse["concept_name"],
                 "operator_concept_id": None,
@@ -2358,6 +2422,11 @@ class MeasurementNITransformer(DataTransformer):
                 "진료과": None,
                 "진료과명": None,
                 "처방일": None,
+                "진료일시": None,
+                "접수일시": None,
+                "실시일시": None,
+                "판독일시": None,
+                "보고일시": None,
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
@@ -2373,6 +2442,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_breth[self.admtime].dt.date,
                 "measurement_datetime": source_breth[self.admtime],
                 "measurement_time": source_breth[self.admtime].dt.time, 
+                "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_breth["concept_name"],
                 "operator_concept_id": None,
@@ -2401,6 +2471,11 @@ class MeasurementNITransformer(DataTransformer):
                 "진료과": None,
                 "진료과명": None,
                 "처방일": None,
+                "진료일시": None,
+                "접수일시": None,
+                "실시일시": None,
+                "판독일시": None,
+                "보고일시": None,
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
@@ -2416,6 +2491,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_bdtp[self.admtime].dt.date,
                 "measurement_datetime": source_bdtp[self.admtime],
                 "measurement_time": source_bdtp[self.admtime].dt.time, 
+                "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_bdtp["concept_name"],
                 "operator_concept_id": None,
@@ -2444,6 +2520,11 @@ class MeasurementNITransformer(DataTransformer):
                 "진료과": None,
                 "진료과명": None,
                 "처방일": None,
+                "진료일시": None,
+                "접수일시": None,
+                "실시일시": None,
+                "판독일시": None,
+                "보고일시": None,
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
@@ -2459,6 +2540,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_spo2[self.admtime].dt.date,
                 "measurement_datetime": source_spo2[self.admtime],
                 "measurement_time": source_spo2[self.admtime].dt.time, 
+                "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_spo2["concept_name"],
                 "operator_concept_id": None,
@@ -2487,6 +2569,11 @@ class MeasurementNITransformer(DataTransformer):
                 "진료과": None,
                 "진료과명": None,
                 "처방일": None,
+                "진료일시": None,
+                "접수일시": None,
+                "실시일시": None,
+                "판독일시": None,
+                "보고일시": None,
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
@@ -2719,7 +2806,7 @@ class ProcedurePACSTransformer(DataTransformer):
             # source1["ORDDD"] = pd.to_datetime(source1["ORDDD"])
             source1 = source1[(source1[self.orddate] <= self.data_range)]
 
-            source2 = source2[[self.hospital, self.orddate, "PRCPNO", "PRCPHISTNO", "EXECPRCPUNIQNO"]]
+            source2 = source2[[self.hospital, self.orddate, "PRCPNO", "PRCPHISTNO", "EXECPRCPUNIQNO", "EXECDD", "EXECTM"]]
             source2["HISORDERID"] = source2["PRCPDD"] + source2["EXECPRCPUNIQNO"]
             source2[self.orddate] = pd.to_datetime(source2[self.orddate])
             source2 = source2[(source2[self.orddate] <= self.data_range)]
@@ -2751,6 +2838,8 @@ class ProcedurePACSTransformer(DataTransformer):
             del source3
             logging.debug(f"검사처방, 처방상세, 영상검사결과 결합 후 데이터 수: {len(source)}")
             
+            source["진료일시"] = source[self.orddd]
+
             source[self.orddd] = pd.to_datetime(source[self.orddd])
             source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
             source["procedure_datetime"] = source["CONFDATE"] + source["CONFTIME"]
@@ -2822,6 +2911,7 @@ class ProcedurePACSTransformer(DataTransformer):
                 "procedure_concept_id": source["concept_id"],
                 "procedure_date": np.select([source["procedure_datetime"].notna()], [source["procedure_datetime"].dt.date], default = source[self.orddate].dt.date),
                 "procedure_datetime": np.select([source["procedure_datetime"].notna()], [source["procedure_datetime"]], default = source[self.orddate]),
+                "procedure_date_type": np.select([source["procedure_datetime"].notna()], ["판독일시"], default = "처방일"),
                 "procedure_type_concept_id": source["procedure_type_concept_id"],
                 "procedure_type_concept_id_name": source["concept_name"],
                 "modifier_concept_id": None,
@@ -2844,6 +2934,11 @@ class ProcedurePACSTransformer(DataTransformer):
                 "나이": None,
                 "처방일": source[self.orddate],
                 "수술일": None,
+                "진료일시": source["진료일시"],
+                "접수일시": None,
+                "실시일시": source["EXECDD"] + source["EXECTM"],
+                "판독일시": source["CONFDATE"] + source["CONFTIME"],
+                "보고일시": None,
                 "결과내역": source[self.readtext],
                 "결론 및 진단": source[self.conclusion],
                 "결과단위": None
@@ -2914,6 +3009,8 @@ class ProcedureBaseOrderTransformer(DataTransformer):
                              self.orddd,self.ordname, self.procedure_source_value, self.provider, self.visit_no]]
             
             source["처방일"] = source[self.procedure_date]
+            source["진료일시"] = source[self.orddd]
+
             source[self.procedure_date] = pd.to_datetime(source[self.procedure_date])
             source[self.orddd] = pd.to_datetime(source[self.orddd])
             source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
@@ -2993,6 +3090,7 @@ class ProcedureBaseOrderTransformer(DataTransformer):
                 "procedure_concept_id": source["concept_id"],
                 "procedure_date": source[self.procedure_date].dt.date,
                 "procedure_datetime": source[self.procedure_date],
+                "procedure_date_type": "처방일",
                 "procedure_type_concept_id": 38000275,
                 "procedure_type_concept_id_name": source["concept_name"],
                 "modifier_concept_id": None,
@@ -3015,6 +3113,11 @@ class ProcedureBaseOrderTransformer(DataTransformer):
                 "나이": None,
                 "처방일": source["처방일"],
                 "수술일": None,
+                "진료일시": source["진료일시"],
+                "접수일시": None,
+                "실시일시": None,
+                "판독일시": None,
+                "보고일시": None,
                 "결과내역": None,
                 "결론 및 진단": None,
                 "결과단위": None
@@ -3083,6 +3186,8 @@ class ProcedureBldOrderTransformer(DataTransformer):
             source = source[[self.hospital, self.procedure_date, self.person_source_value, self.meddept,
                              self.orddd, self.ordname, self.procedure_source_value, self.provider, self.visit_no]]
             source["처방일"] = source[self.procedure_date]
+            source["진료일시"] = source[self.orddd]
+
             source[self.procedure_date] = pd.to_datetime(source[self.procedure_date])
             source[self.orddd] = pd.to_datetime(source[self.orddd])
             source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
@@ -3162,6 +3267,7 @@ class ProcedureBldOrderTransformer(DataTransformer):
                 "procedure_concept_id": source["concept_id"],
                 "procedure_date": source[self.procedure_date].dt.date,
                 "procedure_datetime": source[self.procedure_date],
+                "procedure_date_type": "처방일",
                 "procedure_type_concept_id": 38000275,
                 "procedure_type_concept_id_name": source["concept_name"],
                 "modifier_concept_id": None,
@@ -3184,6 +3290,11 @@ class ProcedureBldOrderTransformer(DataTransformer):
                 "나이": None,
                 "처방일": source["처방일"],
                 "수술일": None,
+                "진료일시": source["진료일시"],
+                "접수일시": None,
+                "실시일시": None,
+                "판독일시": None,
+                "보고일시": None,
                 "결과내역": None,
                 "결론 및 진단": None,
                 "결과단위": None
