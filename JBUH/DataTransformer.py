@@ -29,19 +29,26 @@ class DataTransformer:
         self.care_site_data = self.config["care_site_data"]
         self.visit_data = self.config["visit_data"]
         self.visit_detail = self.config["visit_detail_data"]
+        self.local_kcd_data = self.config["local_kcd_data"]
         self.local_edi_data = self.config["local_edi_data"]
         self.source_flag = "source"
         self.cdm_flag = "CDM"
         self.source_dtype = self.config["source_dtype"]
-        self.encoding = self.config["encoding"]
+        self.source_encoding = self.config["source_encoding"]
+        self.cdm_encoding = self.config["cdm_encoding"]
         self.person_source_value = self.config["person_source_value"]
         self.data_range = self.config["data_range"]
         self.target_zip = self.config["target_zip"]
         self.location_data = self.config["location_data"]
         self.concept_unit = self.config["concept_unit"]
         self.concept_etc = self.config["concept_etc"]
+        self.concept_kcd = self.config["concept_kcd"]
         self.unit_concept_synonym = self.config["unit_concept_synonym"]
         self.memory_usage = str(ps.memory_info().rss / (1024**3)) + "GB"
+        self.diag_condition = self.config["condition"]
+
+        # 상병조건이 있다면 조건에 맞는 폴더 생성
+        os.makedirs(os.path.join(self.cdm_path, self.diag_condition ), exist_ok = True)
 
     def load_config(self, config_path):
         """
@@ -57,18 +64,27 @@ class DataTransformer:
         """
         if path_type == "source":
             full_path = os.path.join(self.config["source_path"], file_name + ".csv")
+            encoding = self.source_encoding
         elif path_type == "CDM":
-            full_path = os.path.join(self.config["CDM_path"], file_name + ".csv")
+            if self.diag_condition :
+                full_path = os.path.join(self.config["CDM_path"], self.diag_condition , file_name + ".csv")
+            else :
+                full_path = os.path.join(self.config["CDM_path"], file_name + ".csv")
+            encoding = self.cdm_encoding
         else :
             raise ValueError(f"Invalid path type: {path_type}")
         
         return pd.read_csv(full_path, dtype = dtype, encoding = encoding)
 
-    def write_csv(self, df, file_path):
+    def write_csv(self, df, file_path, filename, encoding = 'utf-8'):
         """
         DataFrame을 CSV 파일로 저장합니다.
         """
-        df.to_csv(file_path + ".csv", index = False)
+        encoding = self.cdm_encoding
+        if self.diag_condition  :
+            df.to_csv(os.path.join(file_path, self.diag_condition , filename + ".csv"), encoding = encoding, index = False)
+        else :
+            df.to_csv(os.path.join(file_path, filename + ".csv"), encoding = encoding, index = False)
 
     def transform(self):
         """
@@ -133,8 +149,8 @@ class CareSiteTransformer(DataTransformer):
             # 데이터 변환
             transformed_data = self.transform_cdm(source_data, location)
             # CSV 파일로 저장
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             # 로그에 변환 완료 메시지 기록
             logging.info(f"{self.table} 테이블 변환 완료")
@@ -153,7 +169,7 @@ class CareSiteTransformer(DataTransformer):
             source_data = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
             logging.debug(f"원천 데이터 row수: {len(source_data)}, {self.memory_usage}")
 
-            location = self.read_csv(self.location_data, path_type = self.cdm_flag, dtype = self.source_dtype)
+            location = self.read_csv(self.location_data, path_type = self.source_flag, dtype = self.source_dtype)
             return source_data, location
 
         except Exception as e:
@@ -208,8 +224,8 @@ class ProviderTransformer(DataTransformer):
         try:
             source_data = self.process_source()
             transformed_data = self.transform_cdm(source_data)
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -224,7 +240,7 @@ class ProviderTransformer(DataTransformer):
         try :
             source_data = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
             care_site = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype)
             logging.debug(f"원천 데이터 row수: {len(source_data)}, {self.memory_usage}")
 
             source = pd.merge(source_data,
@@ -294,6 +310,7 @@ class PersonTransformer(DataTransformer):
         self.cdm_config = self.config[self.table]
 
         self.source_data = self.cdm_config["data"]["source_data"]
+        self.source_condition = self.cdm_config["data"]["source_condition"]
         self.output_filename = self.cdm_config["data"]["output_filename"]
         self.location_source_value = self.cdm_config["columns"]["location_source_value"]
         self.gender_source_value = self.cdm_config["columns"]["gender_source_value"]
@@ -303,6 +320,7 @@ class PersonTransformer(DataTransformer):
         self.person_name = self.cdm_config["columns"]["person_name"]
         self.abotyp = self.cdm_config["columns"]["abotyp"]
         self.rhtyp = self.cdm_config["columns"]["rhtyp"]
+        self.diagcode = self.cdm_config["columns"]["diagcode"]
 
     def transform(self):
         """
@@ -312,8 +330,8 @@ class PersonTransformer(DataTransformer):
             source_data = self.process_source()
             transformed_data = self.transform_cdm(source_data)
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -328,7 +346,7 @@ class PersonTransformer(DataTransformer):
         """
         try:
             source_data = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
-            location_data = self.read_csv(self.location_data, path_type = self.cdm_flag, dtype = self.source_dtype)
+            location_data = self.read_csv(self.location_data, path_type = self.source_flag, dtype = self.source_dtype)
             logging.debug(f"원천 데이터 row수: {len(source_data)}")
 
             source_data[self.location_source_value] = source_data[self.location_source_value].str[:3]
@@ -339,6 +357,14 @@ class PersonTransformer(DataTransformer):
             source_data = pd.merge(source_data, location_data, left_on = self.location_source_value, right_on="LOCATION_SOURCE_VALUE", how = "left")
             source_data.loc[source_data["LOCATION_ID"].isna(), "LOCATION_ID"] = 0
             logging.debug(f"location 테이블과 결합 후 원천 데이터1 row수: {len(source_data)}, {self.memory_usage}")
+
+            # 상병조건이 있는 경우
+            if self.diag_condition:
+                condition = self.read_csv(self.source_condition, path_type=self.source_flag, dtype=self.source_dtype)
+                condition = condition[condition[self.diagcode].str.startswith(self.diag_condition, na=False)]
+                condition = condition[self.person_source_value].drop_duplicates()
+
+                source_data = pd.merge(source_data, condition, on=self.person_source_value, how = "inner", suffixes=('', '_diag'))
 
             logging.debug(f"CDM테이블과 결합 후 원천 데이터 row수: source: {len(source_data)}, {self.memory_usage}")
 
@@ -443,8 +469,8 @@ class VisitOccurrenceTransformer(DataTransformer):
             source_data, source_data2 = self.process_source()
             transformed_data = self.transform_cdm(source_data, source_data2)
 
-            save_path = os.path.join(self.config["CDM_path"], self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.config["CDM_path"], self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -465,7 +491,7 @@ class VisitOccurrenceTransformer(DataTransformer):
             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag , dtype = self.source_dtype)
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype)
             logging.debug(f"원천 데이터 row수: source: {len(source)}, source2: {len(source2)}, {self.memory_usage}")
 
             # 원천 데이터 범위 설정
@@ -477,7 +503,7 @@ class VisitOccurrenceTransformer(DataTransformer):
             logging.debug(f"데이터 범위 조건 적용 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # 불러온 원천 전처리
-            source = pd.merge(source, person_data, left_on = self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on = self.person_source_value, right_on="person_source_value", how="inner")
             source = source.drop(columns = ["care_site_id", "provider_id"])
             logging.debug(f"person 테이블과 결합 후 원천 데이터1 row수: {len(source)}, {self.memory_usage}")
 
@@ -655,9 +681,8 @@ class VisitDetailTransformer(DataTransformer):
             source_data = self.process_source()
             transformed_data = self.transform_cdm(source_data)
 
-
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -671,12 +696,12 @@ class VisitDetailTransformer(DataTransformer):
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
         """
         try :
-            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype, encoding = self.encoding)
+            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype)
             logging.debug(f"원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # 원천에서 조건걸기
@@ -684,7 +709,7 @@ class VisitDetailTransformer(DataTransformer):
             logging.debug(f"조건 적용 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             source = source.drop(columns = ["care_site_id", "provider_id"])
             logging.debug(f"person 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
@@ -781,6 +806,109 @@ class VisitDetailTransformer(DataTransformer):
             logging.error(f"{self.table} 테이블 CDM 데이터 변환 중 오류: {e}", exc_info = True)
 
 
+class LocalKCDTransformer(DataTransformer):
+    def __init__(self, config_path):
+        super().__init__(config_path)
+        self.table = "local_kcd"
+        self.cdm_config = self.config[self.table]
+
+        # 컬럼 변수 재정의      
+        self.source = self.cdm_config["data"]["source"]
+        self.output_filename = self.cdm_config["data"]["output_filename"]
+
+        self.diagcode = self.cdm_config["columns"]["diagcode"]
+        self.fromdate = self.cdm_config["columns"]["fromdate"]
+        self.todate = self.cdm_config["columns"]["todate"]
+        self.engname = self.cdm_config["columns"]["engname"]
+        self.korname = self.cdm_config["columns"]["korname"]
+        self.stdiagcd = self.cdm_config["columns"]["stdiagcd"]
+        self.kcdversion = self.cdm_config["columns"]["kcdversion"]
+        # columns in concept table
+        self.concept_id = self.cdm_config["columns"]["concept_id"]
+        self.concept_name = self.cdm_config["columns"]["concept_name"]
+        self.domain_id = self.cdm_config["columns"]["domain_id"]
+        self.vocabulary_id = self.cdm_config["columns"]["vocabulary_id"]
+        self.concept_class_id = self.cdm_config["columns"]["concept_class_id"]
+        self.standard_concept = self.cdm_config["columns"]["standard_concept"]
+        self.concept_code = self.cdm_config["columns"]["concept_code"]
+        self.valid_start_date = self.cdm_config["columns"]["valid_start_date"]
+        self.valid_end_date = self.cdm_config["columns"]["valid_end_date"]
+        self.invalid_reason = self.cdm_config["columns"]["invalid_reason"]
+        
+    def transform(self):
+        """
+        소스 데이터를 읽어들여 CDM 형식으로 변환하고 결과를 CSV 파일로 저장하는 메소드입니다.
+        """
+        try:
+            transformed_data = self.process_source()
+
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
+
+            logging.info(f"{self.table} 테이블 변환 완료")
+            logging.info(f"============================")
+        
+        except Exception as e :
+            logging.error(f"{self.table} 테이블 변환 중 오류:\n {e}", exc_info=True)
+            raise
+    
+    def process_source(self):
+        """
+        소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
+        """
+        try : 
+            source = self.read_csv(self.source, path_type = self.source_flag, dtype = self.source_dtype)
+            concept_kcd = self.read_csv(self.concept_kcd, path_type = self.source_flag, dtype = self.source_dtype)
+            logging.debug(f'원천 데이터 row수: order: {len(source)}, concept: {len(concept_kcd)}, {self.memory_usage}')
+
+            # 2. diag 테이블 처리
+            source['changed_diagcode'] = source[self.diagcode].str.split('-').str[0]
+            source = source[source[self.diagcode] != 'Q']
+            logging.debug(f'조건 적용 후 row수: {len(source)}')
+
+            # concept 테이블 처리
+            concept_kcd[self.concept_code] = concept_kcd[self.concept_code].str.replace('.', '')
+            concept_kcd = concept_kcd[concept_kcd[self.vocabulary_id] == 'KCD7']
+
+            # 3. 매칭 함수 정의
+            def match_diagcode(diagcode, concept_kcd):
+                for i in range(len(diagcode), 0, -1):
+                    sub_diagcode = diagcode[:i]
+                    match = concept_kcd[concept_kcd[self.concept_code] == sub_diagcode]
+                    if not match.empty:
+                        return match.iloc[0]
+                return pd.Series([None]*len(concept_kcd.columns), index=concept_kcd.columns)
+
+            # 4. 매칭 수행
+            matched_df = source.apply(lambda row: match_diagcode(row['changed_diagcode'], concept_kcd), axis=1)
+            logging.debug(f'matched_df row수: {len(matched_df)}')
+
+            # 5. 원래 source 매칭 결과 합치기
+            local_kcd = pd.concat([source.reset_index(drop=True), matched_df.reset_index(drop=True)], axis=1)
+            logging.debug(f'원천 데이터와 합친 후 row수: {len(matched_df)}')
+
+            # 6. 필요한 컬럼 선택 및 기본값 설정
+            local_kcd = local_kcd[[self.diagcode, 'changed_diagcode', self.fromdate, self.todate, self.engname, self.korname, self.stdiagcd, self.kcdversion,
+                                self.concept_id, self.concept_name, self.domain_id, self.vocabulary_id, self.concept_class_id, 
+                                self.standard_concept, self.concept_code, self.valid_start_date, self.valid_end_date, self.invalid_reason]]
+
+            # local_kcd[['concept_id', 'concept_name', 'domain_id', 'vocabulary_id', 'concept_class_id',
+            #         'standard_concept', 'concept_code', 'valid_start_date', 'valid_end_date', 'invalid_reason']] = \
+            #     local_kcd[['concept_id', 'concept_name', 'domain_id', 'vocabulary_id', 'concept_class_id',
+            #             'standard_concept', 'concept_code', 'valid_start_date', 'valid_end_date', 'invalid_reason']].fillna('')
+
+            local_kcd = local_kcd.sort_values(self.diagcode)
+
+            logging.debug(f'local_kcd row수: {len(local_kcd)}, {self.memory_usage}')
+            logging.debug(f"요약:\n{local_kcd.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"컬럼별 null 개수:\n{local_kcd.isnull().sum().to_string()}, {self.memory_usage}")
+
+            return local_kcd
+
+        except Exception as e :
+            logging.error(f"{self.table} 테이블 소스 데이터 처리 중 오류:\n {e}", exc_info = True)
+
+
 class ConditionOccurrenceTransformer(DataTransformer):
     def __init__(self, config_path):
         super().__init__(config_path)
@@ -809,9 +937,8 @@ class ConditionOccurrenceTransformer(DataTransformer):
             logging.info(f"{self.table} 테이블: {len(source_data)}건, {self.memory_usage}")
             transformed_data = self.transform_cdm(source_data)
 
-
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -825,17 +952,18 @@ class ConditionOccurrenceTransformer(DataTransformer):
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
         """
         try: 
-            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype, encoding = self.encoding)
+            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_detail = self.read_csv(self.visit_detail, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype)
+            local_kcd = self.read_csv(self.local_kcd_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             logging.debug(f"원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.condition_start_datetime].astype(str) + source[self.patfg] + source[self.meddept]
+            source["visit_source_key"] = source[self.person_source_value] + source[self.condition_start_datetime].astype(str) + source[self.patfg] + source[self.meddept].apply(lambda x: '' if pd.isna(x) else x)
 
             # 원천에서 조건걸기
             source[self.condition_start_datetime] = source[self.condition_start_datetime].apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
@@ -845,9 +973,19 @@ class ConditionOccurrenceTransformer(DataTransformer):
             logging.debug(f"조건 적용후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             source = source.drop(columns = ["care_site_id", "provider_id"])
             logging.debug(f"person 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
+
+            # local_kcd와 병합
+            local_kcd["FROMDATE"] = pd.to_datetime(local_kcd["FROMDATE"], format="%Y%m%d", errors = "coerce")
+            local_kcd["FROMDATE"].fillna(pd.Timestamp('1900-01-01'), inplace = True)
+            local_kcd["TODATE"] = pd.to_datetime(local_kcd["TODATE"], format="%Y%m%d", errors = "coerce")
+            local_kcd["TODATE"].fillna(pd.Timestamp('2099-12-31'), inplace = True)
+
+            source = pd.merge(source, local_kcd, on = self.condition_source_value, how = "left", suffixes=('', '_kcd'))
+            source = source[(source[self.condition_start_datetime] >= source["FROMDATE"]) & (source[self.condition_start_datetime] <= source["TODATE"])]
+            logging.debug(f"local_kcd 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # care_site table과 병합
             source = pd.merge(source, care_site_data, left_on=self.meddept, right_on="care_site_source_value", how="left")
@@ -877,9 +1015,11 @@ class ConditionOccurrenceTransformer(DataTransformer):
 
             source["condition_type_concept_id"] = np.select(type_condition, type_id, default = 0)
             concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)
-            source = pd.merge(source, concept_etc, left_on=["condition_type_concept_id"], right_on=["concept_id"], how="left")
+            source = pd.merge(source, concept_etc, left_on=["condition_type_concept_id"], right_on=["concept_id"], how="left", suffixes=("", "_type_concept"))
             logging.debug(f"concept_etc 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
+            source = source.drop_duplicates()
+            logging.debug(f"중복제거 후 데이터 row수: {len(source)}, {self.memory_usage}")
             # care_site_id가 없는 경우 0으로 값 입력
             source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
 
@@ -921,7 +1061,7 @@ class ConditionOccurrenceTransformer(DataTransformer):
                 "condition_occurrence_id": source.index + 1,
                 "person_id": source["person_id"],
                 "환자명": source["환자명"],
-                "condition_concept_id": 0,
+                "condition_concept_id": np.select([source["concept_id"].notna()],[source["concept_id"]], default = None),
                 "condition_start_date": source[self.condition_start_datetime].dt.date,
                 "condition_start_datetime": source[self.condition_start_datetime],
                 "condition_end_date": np.select(end_date_condition, end_date_value, default = pd.NaT),
@@ -936,7 +1076,7 @@ class ConditionOccurrenceTransformer(DataTransformer):
                 "visit_detail_id": source["visit_detail_id"],
                 "condition_source_value": source[self.condition_source_value],
                 "진단명": source[self.condition_source_value_name],
-                "condition_source_concept_id": 0,
+                "condition_source_concept_id": np.select([source["concept_id"].notna()],[source["concept_id"]], default = None),
                 "condition_status_source_value": source[self.condition_status_source_value],
                 "visit_source_key": source["visit_source_key"],
                 "환자구분": source[self.patfg],
@@ -992,8 +1132,8 @@ class LocalEDITransformer(DataTransformer):
         try:
             transformed_data = self.process_source()
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -1007,10 +1147,10 @@ class LocalEDITransformer(DataTransformer):
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
         """
         try : 
-            order_data = self.read_csv(self.order_data, path_type = self.source_flag, dtype = self.source_dtype, encoding = self.encoding)
+            order_data = self.read_csv(self.order_data, path_type = self.source_flag, dtype = self.source_dtype)
             edi_data = self.read_csv(self.edi_data, path_type = self.source_flag, dtype = self.source_dtype)
-            concept_data = self.read_csv(self.concept_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            atc_data = self.read_csv(self.atc_data, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_data = self.read_csv(self.concept_data, path_type = self.source_flag, dtype = self.source_dtype)
+            atc_data = self.read_csv(self.atc_data, path_type = self.source_flag, dtype = self.source_dtype)
             logging.debug(f'원천 데이터 row수: order: {len(order_data)}, edi: {len(edi_data)}, {self.memory_usage}')
 
             # 처방코드 마스터와 수가코드 매핑
@@ -1099,9 +1239,8 @@ class DrugexposureTransformer(DataTransformer):
             source_data = self.process_source()
             transformed_data = self.transform_cdm(source_data)
 
-
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -1115,14 +1254,14 @@ class DrugexposureTransformer(DataTransformer):
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
         """
         try : 
-            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype, encoding = self.encoding)
-            local_edi = self.read_csv(self.local_edi_data, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
+            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
+            local_edi = self.read_csv(self.local_edi_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_detail = self.read_csv(self.visit_detail, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype)
 
             person_data = person_data[["person_id", "person_source_value", "환자명"]]
             care_site_data = care_site_data[["care_site_id", "care_site_source_value", "care_site_name"]]
@@ -1157,7 +1296,7 @@ class DrugexposureTransformer(DataTransformer):
             logging.info(f"local_edi날짜 조건 적용 후 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             logging.info(f"person 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # care_site table과 병합
@@ -1188,6 +1327,9 @@ class DrugexposureTransformer(DataTransformer):
             source["drug_type_concept_id"] = 38000177
             concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)
             source = pd.merge(source, concept_etc, left_on = "drug_type_concept_id", right_on="concept_id", how="left", suffixes=('', '_drug_type'))
+
+            source = source.drop_duplicates()
+            logging.debug(f"중복제거 후 데이터 row수: {len(source)}, {self.memory_usage}")
 
             logging.info(f"concept_etc 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}")
             logging.info(f"CDM테이블과 병합 후 데이터 row수: {len(source)}, {self.memory_usage}")
@@ -1228,7 +1370,8 @@ class DrugexposureTransformer(DataTransformer):
             "visit_detail_id": source["visit_detail_id"],
             "drug_source_value": source[self.drug_source_value],
             "drug_source_value_name": source[self.drug_source_value_name],
-            "drug_source_concept_id": source["INSEDICODE"],
+            "EDI코드": source["INSEDICODE"],
+            "drug_source_concept_id": source["concept_id"],
             "route_source_value": None,
             "dose_unit_source_value": source[self.dose_unit_source_value],
             "vocabulary_id": "EDI",
@@ -1295,9 +1438,8 @@ class MeasurementStexmrstTransformer(DataTransformer):
             source_data = self.process_source()
             transformed_data = self.transform_cdm(source_data)
 
-
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -1311,16 +1453,16 @@ class MeasurementStexmrstTransformer(DataTransformer):
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
         """
         try:
-            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype, encoding = self.encoding)
-            local_edi = self.read_csv(self.local_edi_data, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
+            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
+            local_edi = self.read_csv(self.local_edi_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_detail = self.read_csv(self.visit_detail, path_type = self.cdm_flag, dtype = self.source_dtype)
-            unit_data = self.read_csv(self.concept_unit, path_type = self.cdm_flag , dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag , dtype = self.source_dtype)
-            unit_concept_synonym = self.read_csv(self.unit_concept_synonym, path_type = self.cdm_flag , dtype = self.source_dtype)
+            unit_data = self.read_csv(self.concept_unit, path_type = self.source_flag , dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag , dtype = self.source_dtype)
+            unit_concept_synonym = self.read_csv(self.unit_concept_synonym, path_type = self.source_flag , dtype = self.source_dtype)
             logging.debug(f'원천 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # 원천에서 조건걸기
@@ -1368,7 +1510,7 @@ class MeasurementStexmrstTransformer(DataTransformer):
 
             # person table과 병합
             person_data = person_data[["person_id", "person_source_value", "환자명"]]
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             del person_data
             logging.debug(f'person 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
 
@@ -1457,6 +1599,9 @@ class MeasurementStexmrstTransformer(DataTransformer):
             source = pd.merge(source, concept_etc, left_on = "value_as_concept_id", right_on="concept_id", how="left", suffixes=('', '_value_as_concept'))
             logging.debug(f'concept_etc: value_as_concept_id 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
             
+            source = source.drop_duplicates()
+            logging.debug(f"중복제거 후 데이터 row수: {len(source)}, {self.memory_usage}")
+
             logging.debug(f'CDM 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
             logging.debug(f'컬럼: {source.columns}')
 
@@ -1522,7 +1667,8 @@ class MeasurementStexmrstTransformer(DataTransformer):
                 "visit_detail_id": source["visit_detail_id"],
                 "measurement_source_value": source[self.measurement_source_value],
                 "measurement_source_value_name": source["ORDNAME_local_edi"],
-                "measurement_source_concept_id": source["INSEDICODE"],
+                "EDI코드": source["INSEDICODE"],
+                "measurement_source_concept_id": source["concept_id"],
                 "unit_source_value": source[self.unit_source_value],
                 "value_source_value": source[self.value_source_value],
                 "vocabulary_id": "EDI",
@@ -1594,7 +1740,7 @@ class MeasurementStexmrstTransformer(DataTransformer):
 #         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
 #         """
 #         try:
-#             source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype, encoding = self.encoding)
+#             source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
 #             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
 #             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
 #             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
@@ -1795,9 +1941,8 @@ class MeasurementVSTransformer(DataTransformer):
             source_data = self.process_source()
             transformed_data = self.transform_cdm(source_data)
 
-
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -1811,17 +1956,17 @@ class MeasurementVSTransformer(DataTransformer):
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
         """
         try:
-            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype, encoding = self.encoding)
+            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_detail = self.read_csv(self.visit_detail, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype)
             logging.debug(f'원천 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.admtime].astype(str) + source[self.patfg] + source[self.meddept]
+            source["visit_source_key"] = source[self.person_source_value] + source[self.admtime].astype(str) + source[self.patfg] + source[self.meddept].apply(lambda x : '' if pd.isna(x) else x)
 
             # 원천에서 조건걸기
             source["진료일시"] = source[self.admtime]
@@ -1851,7 +1996,7 @@ class MeasurementVSTransformer(DataTransformer):
             visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id"]]
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             logging.debug(f'person 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # care_site table과 병합
@@ -1878,6 +2023,8 @@ class MeasurementVSTransformer(DataTransformer):
             source = pd.merge(source, concept_etc, left_on = "measurement_type_concept_id", right_on="concept_id", how="left", suffixes=('', '_measurement_type'))
             logging.debug(f'concept_etc: type_concept_id 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
 
+            source = source.drop_duplicates()
+            logging.debug(f"중복제거 후 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # 값이 없는 경우 0으로 값 입력
             source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
@@ -1955,6 +2102,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "visit_detail_id": source_weight["visit_detail_id"],
                 "measurement_source_value": measurement_concept[self.weight][1],
                 "measurement_source_value_name": measurement_concept[self.weight][1],
+                "EDI코드": None,
                 "measurement_source_concept_id": measurement_concept[self.weight][0],
                 "unit_source_value": measurement_concept[self.weight][3] ,
                 "value_source_value": source_weight[self.weight],
@@ -2005,6 +2153,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "visit_detail_id": source_height["visit_detail_id"],
                 "measurement_source_value": measurement_concept[self.height][1],
                 "measurement_source_value_name": measurement_concept[self.height][1],
+                "EDI코드": None,
                 "measurement_source_concept_id": measurement_concept[self.height][0],
                 "unit_source_value": measurement_concept[self.height][3],
                 "value_source_value": source_height[self.height],
@@ -2055,6 +2204,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "visit_detail_id": source_bmi["visit_detail_id"],
                 "measurement_source_value": measurement_concept[self.bmi][1],
                 "measurement_source_value_name": measurement_concept[self.bmi][1],
+                "EDI코드": None,
                 "measurement_source_concept_id": measurement_concept[self.bmi][0],
                 "unit_source_value": measurement_concept[self.bmi][3],
                 "value_source_value": source_bmi[self.bmi],
@@ -2104,6 +2254,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "visit_detail_id": source_sbp["visit_detail_id"],
                 "measurement_source_value": measurement_concept[self.sbp][1],
                 "measurement_source_value_name": measurement_concept[self.sbp][1],
+                "EDI코드": None,
                 "measurement_source_concept_id": measurement_concept[self.sbp][0],
                 "unit_source_value": measurement_concept[self.sbp][3],
                 "value_source_value": source_sbp[self.sbp],
@@ -2153,6 +2304,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "visit_detail_id": source_dbp["visit_detail_id"],
                 "measurement_source_value": measurement_concept[self.dbp][1],
                 "measurement_source_value_name": measurement_concept[self.dbp][1],
+                "EDI코드": None,
                 "measurement_source_concept_id": measurement_concept[self.dbp][0],
                 "unit_source_value": measurement_concept[self.dbp][3],
                 "value_source_value": source_dbp[self.dbp],
@@ -2202,6 +2354,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "visit_detail_id": source_pr["visit_detail_id"],
                 "measurement_source_value": measurement_concept[self.pr][1],
                 "measurement_source_value_name": measurement_concept[self.pr][1],
+                "EDI코드": None,
                 "measurement_source_concept_id": measurement_concept[self.pr][0],
                 "unit_source_value": measurement_concept[self.pr][3],
                 "value_source_value": source_pr[self.pr],
@@ -2251,6 +2404,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "visit_detail_id": source_bt["visit_detail_id"],
                 "measurement_source_value": measurement_concept[self.bt][1],
                 "measurement_source_value_name": measurement_concept[self.bt][1],
+                "EDI코드": None,
                 "measurement_source_concept_id": measurement_concept[self.bt][0],
                 "unit_source_value": measurement_concept[self.bt][3],
                 "value_source_value": source_bt[self.bt],
@@ -2300,6 +2454,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "visit_detail_id": source_rr["visit_detail_id"],
                 "measurement_source_value": measurement_concept[self.rr][1],
                 "measurement_source_value_name": measurement_concept[self.rr][1],
+                "EDI코드": None,
                 "measurement_source_concept_id": measurement_concept[self.rr][0],
                 "unit_source_value": measurement_concept[self.rr][3],
                 "value_source_value": source_rr[self.rr],
@@ -2349,6 +2504,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "visit_detail_id": source_spo2["visit_detail_id"],
                 "measurement_source_value": measurement_concept[self.spo2][1],
                 "measurement_source_value_name": measurement_concept[self.spo2][1],
+                "EDI코드": None,
                 "measurement_source_concept_id": measurement_concept[self.spo2][0],
                 "unit_source_value": measurement_concept[self.spo2][3],
                 "value_source_value": source_spo2[self.spo2],
@@ -2413,8 +2569,8 @@ class MergeMeasurementTransformer(DataTransformer):
         try : 
             transformed_data = self.process_source()
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -2428,8 +2584,8 @@ class MergeMeasurementTransformer(DataTransformer):
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
         """
         try :
-            source1 = self.read_csv(self.source_data1, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
-            source2 = self.read_csv(self.source_data2, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
+            source1 = self.read_csv(self.source_data1, path_type = self.cdm_flag, dtype = self.source_dtype)
+            source2 = self.read_csv(self.source_data2, path_type = self.cdm_flag, dtype = self.source_dtype)
             
             logging.debug(f"원천1 데이터 row수 : {len(source1)}, 원천2 데이터 row수 :{len(source2)}, 원천1, 원천2 row수 합: {len(source1) + len(source2)}, {self.memory_usage}" )
 
@@ -2477,9 +2633,8 @@ class ProcedureOrderTransformer(DataTransformer):
             source_data = self.process_source()
             transformed_data = self.transform_cdm(source_data)
 
-
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -2493,22 +2648,22 @@ class ProcedureOrderTransformer(DataTransformer):
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
         """
         try: 
-            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype, encoding = self.encoding)
-            local_edi = self.read_csv(self.local_edi_data, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
+            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
+            local_edi = self.read_csv(self.local_edi_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_detail = self.read_csv(self.visit_detail, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype)
             logging.debug(f"원천 데이터 row수: {len(source)}, {self.memory_usage}")
-
-            # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
 
             # 원천에서 조건걸기
             source = source[[self.person_source_value, self.orddate, self.exectime, self.ordseqno, self.opdate, self.procedure_source_value,
                               self.meddept, self.provider, self.medtime, self.patfg, self.age, self.procedure_source_value_name, self.ordclstyp]]
+            # visit_source_key 생성
+            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
+
             source["처방일"] = source[self.orddate]
             source["수술일"] = source[self.opdate]
             source["진료일시"] = source[self.medtime]
@@ -2537,7 +2692,7 @@ class ProcedureOrderTransformer(DataTransformer):
             logging.debug(f"local_edi 사용기간별 필터 적용 후 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             source = source.drop(columns = ["care_site_id", "provider_id"])
             logging.debug(f'person 테이블과 결합 후 데이터 row수, {len(source)}, {self.memory_usage}')
 
@@ -2566,6 +2721,9 @@ class ProcedureOrderTransformer(DataTransformer):
             # type_concept_id 만들고 type_concept_id_name 기반 만들기
             source["procedure_type_concept_id"] = 38000275
             source = pd.merge(source, concept_etc, left_on = "procedure_type_concept_id", right_on="concept_id", how="left", suffixes=('', '_procedure_type'))
+
+            source = source.drop_duplicates()
+            logging.debug(f"중복제거 후 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # 값이 없는 경우 0으로 값 입력
             source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
@@ -2613,7 +2771,8 @@ class ProcedureOrderTransformer(DataTransformer):
                 "visit_detail_id": source["visit_detail_id"],
                 "procedure_source_value": source[self.procedure_source_value],
                 "procedure_source_value_name": source[self.procedure_source_value_name],
-                "procedure_source_concept_id": source["INSEDICODE"],
+                "EDI코드": source["INSEDICODE"],
+                "procedure_source_concept_id": source["concept_id"],
                 "modifier_source_value": None ,
                 "vocabulary_id": "EDI",
                 "visit_source_key": source["visit_source_key"],
@@ -2685,8 +2844,8 @@ class ProcedureStexmrstTransformer(DataTransformer):
             source_data = self.process_source()
             transformed_data = self.transform_cdm(source_data)
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -2700,14 +2859,14 @@ class ProcedureStexmrstTransformer(DataTransformer):
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
         """
         try:
-            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype, encoding = self.encoding)
-            local_edi = self.read_csv(self.local_edi_data, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
+            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
+            local_edi = self.read_csv(self.local_edi_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_detail = self.read_csv(self.visit_detail, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype)
             logging.debug(f'원천 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # 원천에서 조건걸기
@@ -2755,7 +2914,7 @@ class ProcedureStexmrstTransformer(DataTransformer):
             visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id"]]
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             logging.debug(f'person 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # care_site table과 병합
@@ -2785,7 +2944,9 @@ class ProcedureStexmrstTransformer(DataTransformer):
             source = pd.merge(source, concept_etc, left_on = "procedure_type_concept_id", right_on="concept_id", how="left", suffixes=('', '_procedure_type'))
             logging.debug(f'concept_etc: type_concept_id 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
 
-
+            source = source.drop_duplicates()
+            logging.debug(f"중복제거 후 데이터 row수: {len(source)}, {self.memory_usage}")
+            
             # 값이 없는 경우 0으로 값 입력
             source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
             source.loc[source["concept_id"].isna(), "concept_id"] = 0
@@ -2826,7 +2987,8 @@ class ProcedureStexmrstTransformer(DataTransformer):
                 "visit_detail_id": source["visit_detail_id"],
                 "procedure_source_value": source[self.procedure_source_value],
                 "procedure_source_value_name": source["ORDNAME_local_edi"],
-                "procedure_source_concept_id": source["INSEDICODE"],
+                "EDI코드": source["INSEDICODE"],
+                "procedure_source_concept_id": source["concept_id"],
                 "modifier_source_value": None,
                 "vocabulary_id": "EDI",
                 "visit_source_key": source["visit_source_key"],
@@ -2878,8 +3040,8 @@ class MergeProcedureTransformer(DataTransformer):
         try:
             transformed_data = self.process_source()
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -2893,8 +3055,8 @@ class MergeProcedureTransformer(DataTransformer):
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
         """
         try:
-            source1 = self.read_csv(self.source_data1, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
-            source2 = self.read_csv(self.source_data2, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
+            source1 = self.read_csv(self.source_data1, path_type = self.cdm_flag, dtype = self.source_dtype)
+            source2 = self.read_csv(self.source_data2, path_type = self.cdm_flag, dtype = self.source_dtype)
             logging.debug(f'원천 데이터 row수: 원천1: {len(source1)}, 원천2: {len(source2)}, 원천1 + 원천2: {len(source1) + len(source2)}, {self.memory_usage}')
 
             # axis = 0을 통해 행으로 데이터 합치기, ignore_index = True를 통해 dataframe index재설정
@@ -2932,8 +3094,8 @@ class ObservationPeriodTransformer(DataTransformer):
         """
         transformed_data = self.process_source()
 
-        save_path = os.path.join(self.cdm_path, self.output_filename)
-        self.write_csv(transformed_data, save_path)
+        # save_path = os.path.join(self.cdm_path, self.output_filename)
+        self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
         logging.info(f"{self.table} 테이블 변환 완료")
         logging.info(f"============================")
@@ -2943,11 +3105,11 @@ class ObservationPeriodTransformer(DataTransformer):
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
         """
         try:
-            visit_data = self.read_csv(self.visit, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
-            condition_data = self.read_csv(self.condition, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
-            drug_data = self.read_csv(self.drug, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
-            measurement_data = self.read_csv(self.measurement, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
-            procedure_data = self.read_csv(self.procedure, path_type = self.cdm_flag, dtype = self.source_dtype, encoding = self.encoding)
+            visit_data = self.read_csv(self.visit, path_type = self.cdm_flag, dtype = self.source_dtype)
+            condition_data = self.read_csv(self.condition, path_type = self.cdm_flag, dtype = self.source_dtype)
+            drug_data = self.read_csv(self.drug, path_type = self.cdm_flag, dtype = self.source_dtype)
+            measurement_data = self.read_csv(self.measurement, path_type = self.cdm_flag, dtype = self.source_dtype)
+            procedure_data = self.read_csv(self.procedure, path_type = self.cdm_flag, dtype = self.source_dtype)
 
             # 각 파일별 환자의 min, max date 구하기
             visit_data = visit_data[["person_id", "visit_start_date", "visit_end_date"]]

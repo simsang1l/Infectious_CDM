@@ -1,6 +1,7 @@
 source_path: "F:/01.감염병데이터베이스/data/2024_infectious_DW"
-CDM_path: "F:/01.감염병데이터베이스/data/2024_infectious_CDM"
-encoding: "utf-8"
+CDM_path: "F:/01.감염병데이터베이스/data/2024_infectious_CDM_folder"
+source_encoding: "utf-8"
+cdm_encoding: "utf-8-sig"
 source_dtype: "str"
 target_zip: "549"
 data_range: "2023-12-31"
@@ -9,12 +10,17 @@ person_data: "person"
 provider_data: "provider"
 visit_data: "visit_occurrence"
 visit_detail_data: "visit_detail"
+local_kcd_data: "local_kcd"
 local_edi_data: "local_edi"
 person_source_value: "PATNO"
 location_data: "location"
 concept_unit: "concept_unit"
 concept_etc: "concept_etc"
+concept_kcd: "concept_kcd7"
 unit_concept_synonym: "unit_concept_synonym"
+condition: "A753"
+# ['A9380', 'A753', 'A31']
+
 excel_path: "QC/품질진단지표.xlsx"
 sheet_table_count: "원본비교결과"
 sheet_field_summary: "컬럼별데이터분포진단"
@@ -47,6 +53,7 @@ provider:
 person:
   data:
     source_data: "ods_appatbat"
+    source_condition: "dw_mmpdiagt"
     output_filename: "person"
   columns:
     gender_source_value: "SEX"
@@ -57,6 +64,8 @@ person:
     location_source_value: "ZIPCODE"
     abotyp: ABOTYP
     rhtyp: RHTYP
+    # 상병코드가 있을 경우 상병코드 컬럼 내용
+    diagcode: "DIAGCODE"
 
 visit_occurrence:
   data:
@@ -86,7 +95,32 @@ visit_detail:
     discharge_to_source_value: "DSCHSTATE"
     meddept: "MEDDEPT"
     provider: "CHADR"
- 
+
+local_kcd:
+  data: 
+    source: ods_sidiagct
+    output_filename: local_kcd
+  columns:
+    diagcode: DIAGCODE
+    fromdate: FROMDATE
+    todate: TODATE
+    engname: ENGNAME
+    korname: KORNAME
+    stdiagcd: STDIAGCD
+    kcdversion: KCDVERSION
+    # columns in concept table
+    concept_id: concept_id
+    concept_name: concept_name
+    domain_id: domain_id
+    vocabulary_id: vocabulary_id
+    concept_class_id: concept_class_id
+    standard_concept: standard_concept
+    concept_code: concept_code
+    valid_start_date: valid_start_date
+    valid_end_date: valid_end_date
+    invalid_reason: invalid_reason
+
+
 condition_occurrence:
   data:
     source_data: "dw_mmpdiagt"

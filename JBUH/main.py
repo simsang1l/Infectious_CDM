@@ -20,6 +20,9 @@ if __name__ == "__main__":
 
         visit_detail = VisitDetailTransformer(config)    
         visit_detail.transform()
+        
+        local_kcd = LocalKCDTransformer(config)    
+        local_kcd.transform()
 
         condition_occurrence = ConditionOccurrenceTransformer(config)    
         condition_occurrence.transform()
