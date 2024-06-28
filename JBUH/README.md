@@ -63,5 +63,5 @@ python으로 작성되어 있어 python 3.8이상을 추천드립니다.
 `concept_etc`: domain_id가 `Type Concept`, `Provider`, `Meas Value`, `Meas Value Operator`인 concept 데이터  
 `concept_KCD7`: vocabulary_id가 KCD7인 concept데이터  
 `concept_unit`: domain_id가 `Unit`인 경우  
-`edi_atc`: 의약품관리종합포털(https://biz.kpis.or.kr/kpis_biz/index.jsp?sso=ok) -> 의약품정보검색 -> 코드매핑조회 창에서 `전체 다운로드`한 파일과 의약품정보검색 -> ATC정보조회에서 하단의 `ATC Index(WHO ATC 및 K-ATC)`를 이용하여 연결  
+`edi_atc`: [의약품관리종합포털](https://biz.kpis.or.kr/kpis_biz/index.jsp?sso=ok) -> 의약품정보검색 -> 코드매핑조회 창에서 `전체 다운로드`한 파일과 의약품정보검색 -> ATC정보조회에서 하단의 `ATC Index(WHO ATC 및 K-ATC)`를 이용하여 연결  
 `unit_concept_synonym`: unit에 대한 동의어 정의 데이터  
