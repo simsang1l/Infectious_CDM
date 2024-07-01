@@ -22,6 +22,7 @@ condition: "A9380"
 # ['A9380', 'A753', 'A31']
 no_matching_concept: [0, "No matching concept"]
 
+# DQ
 excel_path: "QC/품질진단지표.xlsx"
 sheet_table_count: "원본비교결과"
 sheet_field_summary: "컬럼별데이터분포진단"
