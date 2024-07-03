@@ -45,7 +45,7 @@ class DataTransformer:
         self.concept_kcd = self.config["concept_kcd"]
         self.unit_concept_synonym = self.config["unit_concept_synonym"]
         self.memory_usage = str(ps.memory_info().rss / (1024**3)) + "GB"
-        self.diag_condition = self.config["condition"]
+        self.diag_condition = self.config["diag_condition"]
         self.no_matching_concept= self.config["no_matching_concept"]
 
         # 상병조건이 있다면 조건에 맞는 폴더 생성
@@ -460,7 +460,6 @@ class VisitOccurrenceTransformer(DataTransformer):
         self.admitted_from_source_value = self.cdm_config["columns"]["admitted_from_source_value"]
         self.discharge_to_source_value = self.cdm_config["columns"]["discharge_to_source_value"]
         self.visit_source_value = self.cdm_config["columns"]["visit_source_value"]
-        
 
     def transform(self):
         """
@@ -560,7 +559,7 @@ class VisitOccurrenceTransformer(DataTransformer):
             cdm_o = pd.DataFrame({
                 "person_id": source["person_id"],
                 "환자명": source["환자명"],
-                "visit_concept_id": 9202,
+                "visit_concept_id": 9202, #np.select([source[self.visit_source_value] == "O"], [9202], default = self.no_matching_concept[0]),
                 "visit_start_date": source[self.medtime].dt.date,
                 "visit_start_datetime": source[self.medtime],
                 "visit_end_date": source[self.medtime].dt.date,
@@ -661,7 +660,7 @@ class VisitDetailTransformer(DataTransformer):
                         , "visit_detail_type_concept_id", "visit_detail_type_concept_id_name", "provider_id", "care_site_id", "visit_detail_source_value"
                         , "visit_detail_source_concept_id", "admitted_from_concept_id", "admitted_from_source_value"
                         , "discharge_to_source_value", "discharge_to_concept_id", "preceding_visit_detail_id"
-                        , "visit_detail_parent_id", "visit_occurrence_id", "진료과", "진료과명"]
+                        , "visit_detail_parent_id", "visit_occurrence_id", "진료과", "진료과명", "병동번호", "병동명"]
 
         # 컬럼 변수 재정의    
         self.source_data = self.cdm_config["data"]["source_data"]
@@ -673,7 +672,8 @@ class VisitDetailTransformer(DataTransformer):
         self.visit_detail_source_value = self.cdm_config["columns"]["visit_detail_source_value"]
         self.admitted_from_source_value = self.cdm_config["columns"]["admitted_from_source_value"]
         self.discharge_to_source_value = self.cdm_config["columns"]["discharge_to_source_value"]
-        
+        self.wardno = self.cdm_config["columns"]["wardno"]
+
     def transform(self):
         """
         소스 데이터를 읽어들여 CDM 형식으로 변환하고 결과를 CSV 파일로 저장하는 메소드입니다.
@@ -709,6 +709,15 @@ class VisitDetailTransformer(DataTransformer):
             source = source[source["DELYN"]== "N"]
             logging.debug(f"조건 적용 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
+            # 201903081045같은 데이터가 2019-03-08 10:04:05로 바뀌는 문제 발견 
+            def convert_datetime_format(x):
+                if pd.isna(x):  # x가 NaN인지 확인
+                    return x
+                else:
+                    return x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:]
+            source[self.visit_detail_start_datetime] = source[self.visit_detail_start_datetime].apply(convert_datetime_format)
+            source[self.visit_detail_end_datetime] = source[self.visit_detail_end_datetime].apply(convert_datetime_format)
+
             # person table과 병합
             source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             source = source.drop(columns = ["care_site_id", "provider_id"])
@@ -717,6 +726,10 @@ class VisitDetailTransformer(DataTransformer):
             # care_site table과 병합
             source = pd.merge(source, care_site_data, left_on=self.meddept, right_on="care_site_source_value", how="left")
             logging.debug(f"care_site 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
+
+            # 병동명을 위한 care_site table과 병합
+            source = pd.merge(source, care_site_data, left_on=self.wardno, right_on="care_site_source_value", how="left", suffixes=('', '_wardno'))
+            logging.debug(f"병동명을 위한 care_site 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # provider table과 병합
             source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
@@ -734,7 +747,8 @@ class VisitDetailTransformer(DataTransformer):
             logging.debug(f"CDM 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # 컬럼을 datetime형태로 변경
-            source[self.visit_detail_start_datetime] = pd.to_datetime(source[self.visit_detail_start_datetime], format = "%Y%m%d%H%M%S")
+            source[self.visit_detail_start_datetime] = pd.to_datetime(source[self.visit_detail_start_datetime])
+            source[self.visit_detail_end_datetime] = pd.to_datetime(source[self.visit_detail_end_datetime], errors="coerce")
             source["visit_start_datetime"] = pd.to_datetime(source["visit_start_datetime"])
             source["visit_end_datetime"] = pd.to_datetime(source["visit_end_datetime"])
             
@@ -748,7 +762,6 @@ class VisitDetailTransformer(DataTransformer):
 
             source = source[(source[self.visit_detail_start_datetime] >= source["visit_start_datetime"]) & (source[self.visit_detail_start_datetime] <= source["visit_end_datetime"])]
             # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
-            source[self.visit_detail_end_datetime] = pd.to_datetime(source[self.visit_detail_end_datetime], errors="coerce")
             logging.debug(f"CDM 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             return source
@@ -783,7 +796,9 @@ class VisitDetailTransformer(DataTransformer):
                 "visit_detail_parent_id": None,
                 "visit_occurrence_id": source["visit_occurrence_id"],
                 "진료과": source[self.meddept],
-                "진료과명": source["care_site_name"]
+                "진료과명": source["care_site_name"],
+                "병동번호": source[self.wardno],
+                "병동명": source["care_site_name_wardno"]
                 })
 
             cdm = cdm[cdm["visit_detail_start_datetime"] <= self.data_range]
@@ -1008,8 +1023,16 @@ class ConditionOccurrenceTransformer(DataTransformer):
             logging.debug(f"visit_occurrence 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # visit_detail table과 병합
+            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
+            visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
+            visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
             source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
             logging.debug(f"visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
+
+            source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.condition_start_datetime] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
+            source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
+            source = source.drop_duplicates()
+            logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # concept_etc table과 병합
             type_condition = [
@@ -1281,12 +1304,12 @@ class DrugexposureTransformer(DataTransformer):
             care_site_data = care_site_data[["care_site_id", "care_site_source_value", "care_site_name"]]
             provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
             visit_data = visit_data[["visit_occurrence_id", "visit_start_datetime", "care_site_id", "visit_source_value", "person_id"]]
-            visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id"]]
+            visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id", "visit_detail_start_datetime", "visit_detail_end_datetime"]]
             logging.info(f"원천 데이터 row수:, {len(source)}, {self.memory_usage}")
 
             # 원천에서 조건걸기
             source[self.drug_exposure_start_datetime] = pd.to_datetime(source[self.drug_exposure_start_datetime], format="%Y%m%d")
-            source = source[(source[self.drug_exposure_start_datetime] <= self.data_range)] # & ((source[self.dcyn] == "N" )| (source[self.dcyn] == None))]
+            source = source[(source[self.drug_exposure_start_datetime] <= self.data_range) & (source[self.dcyn] == "N" )] #| (source[self.dcyn] == None))]
             source = source[[self.person_source_value, self.drug_source_value, self.drug_exposure_start_datetime,
                              self.meddept, self.provider, self.patfg, self.medtime, self.days_supply,
                              self.qty, self.cnt, self.dose_unit_source_value, self.drug_source_value_name,
@@ -1332,8 +1355,16 @@ class DrugexposureTransformer(DataTransformer):
             logging.info(f"visit_occurrence 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # visit_detail table과 병합
+            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
+            visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
+            visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
             source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
-            logging.info(f"visit_detail 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}")
+            logging.debug(f"visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
+            
+            source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.drug_exposure_start_datetime] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
+            source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
+            source = source.drop_duplicates(subset=["person_id", self.drug_exposure_start_datetime, self.patfg, self.drug_source_value, self.medtime, self.ordseqno, self.meddept])
+            logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # # care_site_id가 없는 경우 0으로 값 입력
             # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
@@ -1368,8 +1399,8 @@ class DrugexposureTransformer(DataTransformer):
             "drug_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
             "drug_exposure_start_date": source[self.drug_exposure_start_datetime].dt.date,
             "drug_exposure_start_datetime": source[self.drug_exposure_start_datetime],
-            "drug_exposure_end_date": source[self.drug_exposure_start_datetime].dt.date + pd.to_timedelta(source[self.days_supply].astype(int) + 1, unit = "D"),
-            "drug_exposure_end_datetime": source[self.drug_exposure_start_datetime] + pd.to_timedelta(source[self.days_supply].astype(int) + 1, unit = "D"),
+            "drug_exposure_end_date": source[self.drug_exposure_start_datetime].dt.date + pd.to_timedelta(source[self.days_supply].astype(int)), # + 1, unit = "D"),
+            "drug_exposure_end_datetime": source[self.drug_exposure_start_datetime] + pd.to_timedelta(source[self.days_supply].astype(int)), # + 1, unit = "D"),
             "verbatim_end_date": None,
             "drug_type_concept_id": np.select([source["drug_type_concept_id"].notna()], [source["drug_type_concept_id"]], default= self.no_matching_concept[0]),
             "drug_type_concept_id_name": np.select([source["concept_name"].notna()], [source["concept_name"]], default = self.no_matching_concept[1]),
@@ -1404,8 +1435,8 @@ class DrugexposureTransformer(DataTransformer):
             "용법코드": source[self.methodcd],
             "처방순번": source[self.ordseqno],
             "ATC코드": source[self.atccode],
-            "ATC 코드명": source[self.atccodename],
-            "dcyn": source[self.dcyn]
+            "ATC 코드명": source[self.atccodename]
+            # ,"dcyn": source[self.dcyn]
             })
 
             logging.info(f"CDM테이블 row수: {len(cdm)}, {self.memory_usage}")
@@ -1498,6 +1529,7 @@ class MeasurementStexmrstTransformer(DataTransformer):
             source[self.orddate] = pd.to_datetime(source[self.orddate], format="%Y%m%d")
             source[self.exectime] = pd.to_datetime(source[self.exectime], errors = "coerce")
             source = source[(source[self.orddate] <= pd.to_datetime(self.data_range)) & (source[self.measurement_source_value].str[:1].isin(["L", "P"])) ]
+            source = source[~source[self.measurement_source_value].isin(["L999"])]
             
             # 201903081045같은 데이터가 2019-03-08 10:04:05로 바뀌는 문제 발견하여 분리해서 연결 후 datetime형태로 변경
             # NaN값이 있어 float형 NaN으로 읽는 경우가 있어 .astype(str) 추가
@@ -1559,10 +1591,16 @@ class MeasurementStexmrstTransformer(DataTransformer):
             logging.debug(f'visit_occurrence 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # visit_detail table과 병합
-            visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id"]]            
+            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
+            visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
+            visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
             source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
-            source = source.drop_duplicates()
-            logging.debug(f'visit_detail 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
+            logging.debug(f"visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
+            
+            source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.orddate] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
+            source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
+            source = source.drop_duplicates(subset=["person_id", self.orddate, self.patfg, self.measurement_source_value, self.medtime, self.ordseqno, self.meddept])
+            logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             ### unit매핑 작업 ###
             # concept_unit과 병합
@@ -2022,7 +2060,7 @@ class MeasurementVSTransformer(DataTransformer):
             care_site_data = care_site_data[["care_site_id", "care_site_source_value", "care_site_name"]]
             provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
             visit_data = visit_data[["visit_occurrence_id", "visit_start_datetime", "care_site_id", "visit_source_value", "person_id"]]
-            visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id"]]
+            visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id", "visit_detail_start_datetime", "visit_detail_end_datetime"]]
 
             # person table과 병합
             source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
@@ -2041,8 +2079,16 @@ class MeasurementVSTransformer(DataTransformer):
             logging.debug(f'visit_occurrence 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # visit_detail table과 병합
+            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
+            visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
+            visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
             source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
-            logging.debug(f'visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}')
+            logging.debug(f"visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
+            
+            source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.measurement_datetime] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
+            source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
+            source = source.drop_duplicates(subset=["person_id", self.admtime, self.patfg, self.measurement_datetime, self.meddept])
+            logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
             
             ### concept_etc테이블과 병합 ###
             concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)            
@@ -2706,7 +2752,8 @@ class ProcedureOrderTransformer(DataTransformer):
 
             source[self.orddate] = pd.to_datetime(source[self.orddate], format="%Y%m%d")
             source[self.exectime] = source[self.exectime].astype(str).apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
-            source[self.exectime] = pd.to_datetime(source[self.exectime], format="%Y%m%d%H%M%S", errors = "coerce")
+            # source[self.exectime] = pd.to_datetime(source[self.exectime], format="%Y%m%d%H%M%S", errors = "coerce")
+            source[self.exectime] = pd.to_datetime(source[self.exectime], errors = "coerce")
             source[self.medtime] = source[self.medtime].astype(str).apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
             source[self.medtime] = pd.to_datetime(source[self.medtime], errors = "coerce")
             source[self.opdate] = pd.to_datetime(source[self.opdate], format = "%Y%m%d")
@@ -2749,8 +2796,16 @@ class ProcedureOrderTransformer(DataTransformer):
             logging.debug(f'visit_occurrence 테이블과 결합 후 데이터 row수, {len(source)}, {self.memory_usage}')
 
             # visit_detail table과 병합
+            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
+            visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
+            visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
             source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
-            logging.debug(f'visit_detail 테이블과 결합 후 데이터 row수, {len(source)}, {self.memory_usage}')
+            logging.debug(f"visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
+            
+            source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.orddate] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
+            source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
+            source = source.drop_duplicates(subset=["person_id", self.orddate, self.patfg, self.procedure_source_value, self.medtime, self.ordseqno, self.meddept])
+            logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             ### concept_etc테이블과 병합 ###
             concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)            
@@ -2816,7 +2871,7 @@ class ProcedureOrderTransformer(DataTransformer):
                 "처방코드": source[self.procedure_source_value],
                 "처방명": source[self.procedure_source_value_name],
                 "환자구분": source[self.patfg],
-                "잔료과": source[self.meddept],
+                "진료과": source[self.meddept],
                 "진료과명": source["care_site_name"],
                 "나이": source[self.age],
                 "처방일": source["처방일"],
@@ -2926,9 +2981,9 @@ class ProcedureStexmrstTransformer(DataTransformer):
             source[self.orddate] = pd.to_datetime(source[self.orddate])
             source = source[(source[self.orddate] <= pd.to_datetime(self.data_range)) & (~source[self.procedure_source_value].str[:1].isin(["L", "P"])) ]
             source[self.exectime] = source[self.exectime].astype(str).apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
-            source[self.exectime] = pd.to_datetime(source[self.exectime], format="%Y%m%d%H%M%S", errors = "coerce")
+            source[self.exectime] = pd.to_datetime(source[self.exectime], errors = "coerce")
             source[self.medtime] = source[self.medtime].astype(str).apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
-            source[self.medtime] = pd.to_datetime(source[self.medtime], format="%Y%m%d%H%M%S", errors = "coerce")
+            source[self.medtime] = pd.to_datetime(source[self.medtime], errors = "coerce")
             
             # value_as_number float형태로 저장되게 값 변경
             source[self.value_source_value] = source[self.value_source_value].str.extract('(\d+\.\d+|\d+)')
@@ -2956,7 +3011,7 @@ class ProcedureStexmrstTransformer(DataTransformer):
             care_site_data = care_site_data[["care_site_id", "care_site_source_value", "care_site_name"]]
             provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
             visit_data = visit_data[["visit_occurrence_id", "visit_start_datetime", "care_site_id", "visit_source_value", "person_id"]]
-            visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id"]]
+            visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id", "visit_detail_start_datetime", "visit_detail_end_datetime"]]
 
             # person table과 병합
             source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
@@ -2978,8 +3033,16 @@ class ProcedureStexmrstTransformer(DataTransformer):
             logging.debug(f'visit_occurrence 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
 
             # visit_detail table과 병합
+            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
+            visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
+            visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
             source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
-            logging.debug(f'visit_detail 테이블과 결합 후 데이터 row수: {len(source)}, {self.memory_usage}')
+            logging.debug(f"visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
+            
+            source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.orddate] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
+            source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
+            source = source.drop_duplicates(subset=["person_id", self.orddate, self.patfg, self.procedure_source_value, self.medtime, self.ordseqno, self.meddept])
+            logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
             
             ### concept_etc테이블과 병합 ###
             concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)            

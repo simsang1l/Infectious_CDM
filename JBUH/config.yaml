@@ -18,7 +18,7 @@ concept_unit: "concept_unit"
 concept_etc: "concept_etc"
 concept_kcd: "concept_kcd7"
 unit_concept_synonym: "unit_concept_synonym"
-condition: "A9380"
+diag_condition: "A9380"
 # ['A9380', 'A753', 'A31']
 no_matching_concept: [0, "No matching concept"]
 
@@ -97,6 +97,7 @@ visit_detail:
     discharge_to_source_value: "DSCHSTATE"
     meddept: "MEDDEPT"
     provider: "CHADR"
+    wardno: "WARDNO"
 
 local_kcd:
   data: 
