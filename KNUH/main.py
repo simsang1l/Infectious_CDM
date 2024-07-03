@@ -28,9 +28,6 @@ if __name__ == "__main__":
         drug_exposure = DrugexposureTransformer(config)    
         drug_exposure.transform()
 
-        ### local_edi = LocalEDITransformer(config)    
-        ### local_edi.transform()
-
         measurement_edi = MeasurementEDITransformer(config)    
         measurement_edi.transform()
 
@@ -67,8 +64,8 @@ if __name__ == "__main__":
         observation_period = ObservationPeriodTransformer(config)
         observation_period.transform()
         
-        with open('main_qc.py', 'r', encoding="utf-8") as file:
-            exec(file.read())
+        # with open('main_qc.py', 'r', encoding="utf-8") as file:
+        #     exec(file.read())
         
     except Exception as e :
         logging.error(f"Exucution failed: {e}", exc_info=True)

@@ -62,8 +62,8 @@ def visit_occurrence_field_summary(cdm_path, excel_path, sheetname):
     result["top"] = np.select([result["top"].isnull()], [result["manual_top"]], default=result["top"])
     result["freq"] = np.select([result["freq"].isnull()], [result["manual_freq"]], default=result["freq"])
 
-    result = result[["id", "table_name", "column_name", "count", "unique",
-                "top", "freq", "mean", "std", "min", "25%", "50%", "75%", "max", "null_count", "null_ratio"]]
+    result = result[["id", "table_name", "column_name", "count", "unique",\
+                     "top", "freq", "mean", "std", "min", "25%", "50%", "75%", "max", "null_count", "null_ratio"]]
     
     df = pd.DataFrame(result)    
     write_df_to_excel(excel_path, sheetname, df)

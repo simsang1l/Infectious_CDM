@@ -1,7 +1,7 @@
 source_path: "F:\\01.감염병데이터베이스\\data\\knuh\\emr"
 CDM_path: "F:\\01.감염병데이터베이스\\data\\knuh\\cdm"
 source_encoding: "cp949"
-cdm_encoding: "utf-8"
+cdm_encoding: "utf-8-sig"
 source_dtype: "str"
 target_zip: "419"
 data_range: "2023-12-31"
@@ -23,11 +23,16 @@ edicode: "INSUEDICD"
 fromdate: "FROMDATE"
 todate: "TODATE"
 visit_no: "CRETNO"
+sheet_meta: "메타데이터진단"
+# diag_condition ex. 'A9380' 'A753' 'A31'
+diag_condition: ""
+no_matching_concept: [0, "No matching concept"]
+
+# DQ
 excel_path: "QC/품질진단지표.xlsx"
 sheet_table_count: "원본비교결과"
 sheet_field_summary: "컬럼별데이터분포진단"
 sheet_dq: "점검사항"
-sheet_meta: "메타데이터진단"
 
 care_site:
   data:
@@ -54,6 +59,7 @@ provider:
 person:
   data:
     source_data: "19.PMCMPTBS_환자기본정보"
+    source_condition: "12.MMOHDIAG_진단정보"
     output_filename: "person"
   columns:
     gender_source_value: "SEX"
@@ -64,6 +70,8 @@ person:
     location_source_value: "ZIPCD1"
     abotyp: "BTYPE"
     rhtyp: "RH"
+    # 상병코드가 있을 경우 상병코드 컬럼 내용
+    diagcode: "DIAGCD"
 
 visit_occurrence:
   data:

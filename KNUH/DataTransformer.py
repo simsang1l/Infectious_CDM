@@ -45,6 +45,8 @@ class DataTransformer:
         self.concept_etc = self.config["concept_etc"]
         self.unit_concept_synonym = self.config["unit_concept_synonym"]
         self.visit_no = self.config["visit_no"]
+        self.diag_condition = self.config["diag_condition"]
+        self.no_matching_concept = self.config["no_matching_concept"]
 
     def load_config(self, config_path):
         """
@@ -62,18 +64,25 @@ class DataTransformer:
             full_path = os.path.join(self.config["source_path"], file_name + ".csv")
             encoding = self.source_encoding
         elif path_type == "CDM":
-            full_path = os.path.join(self.config["CDM_path"], file_name + ".csv")
+            if self.diag_condition:
+                full_path = os.path.join(self.config["CDM_path"], self.diag_condition, file_name + ".csv")
+            else :
+                full_path = os.path.join(self.config["CDM_path"], file_name + ".csv")
             encoding = self.cdm_encoding
         else :
             raise ValueError(f"Invalid path type: {path_type}")
         
         return pd.read_csv(full_path, dtype = dtype, encoding = encoding)
 
-    def write_csv(self, df, file_path):
+    def write_csv(self, df, file_path, encoding = 'utf-8'):
         """
         DataFrame을 CSV 파일로 저장합니다.
         """
-        df.to_csv(file_path + ".csv", index = False)
+        encoding = self.cdm_encoding
+        if self.diag_condition:
+            df.to_csv(os.path.join(file_path, self.diag_condition, file_path + ".csv"), encoding = encoding, index = False)
+        else:
+            df.to_csv(os.path.join(file_path, file_path + ".csv"), encoding = encoding, index = False)
 
     def transform(self):
         """
@@ -301,6 +310,9 @@ class PersonTransformer(DataTransformer):
         self.person_name = self.cdm_config["columns"]["person_name"]
         self.abotyp = self.cdm_config["columns"]["abotyp"]
         self.rhtyp = self.cdm_config["columns"]["rhtyp"]
+        self.source_condition = self.cdm_config["data"]["source_condition"]
+        self.diagcode = self.cdm_config["columns"]["diagcode"]
+
 
     def transform(self):
         """
@@ -330,8 +342,16 @@ class PersonTransformer(DataTransformer):
             logging.debug(f"원천 데이터 row수: {len(source_data)}")
             
             source_data = pd.merge(source_data, location_data, left_on = self.location_source_value, right_on="LOCATION_SOURCE_VALUE", how = "left")
-            source_data.loc[source_data["LOCATION_ID"].isna(), "LOCATION_ID"] = 0
+            source_data.loc[source_data["LOCATION_ID"].isna(), "LOCATION_ID"] = None
             logging.debug(f"location 테이블과 결합 후 원천 데이터1 row수: {len(source_data)}")
+
+            # 상병조건이 있는 경우
+            if self.diag_condition:
+                condition = self.read_csv(self.source_condition, path_type=self.source_flag, dtype=self.source_dtype)
+                condition = condition[condition[self.diagcode].str.startswith(self.diag_condition, na=False)]
+                condition = condition[self.person_source_value].drop_duplicates()
+
+                source_data = pd.merge(source_data, condition, on=self.person_source_value, how = "inner", suffixes=('', '_diag'))
 
             logging.debug(f"CDM테이블과 결합 후 원천 데이터 row수: source: {len(source_data)}")
 
@@ -361,25 +381,25 @@ class PersonTransformer(DataTransformer):
 
             cdm = pd.DataFrame({
                 "person_id" : source.index + 1,
-                "gender_concept_id": np.select(gender_conditions, gender_concept_id, default = 0),
+                "gender_concept_id": np.select(gender_conditions, gender_concept_id, default = self.no_matching_concept[0]),
                 "year_of_birth": source[self.birth_datetime].str[:4],
                 "month_of_birth": source[self.birth_datetime].str[4:6],
                 "day_of_birth": source[self.birth_datetime].str[6:8],
                 "birth_datetime": pd.to_datetime(source[self.birth_datetime], format = "%Y%m%d", errors='coerce'),
                 "death_datetime": pd.to_datetime(source[self.death_datetime], format = "%Y%m%d", errors='coerce'),
-                "race_concept_id": np.select(race_conditions, race_concept_id, default = 0),
-                "ethnicity_concept_id": 0,
+                "race_concept_id": np.select(race_conditions, race_concept_id, default = self.no_matching_concept[0]),
+                "ethnicity_concept_id": self.no_matching_concept[0],
                 "location_id": source["LOCATION_ID"],
-                "provider_id": 0,
-                "care_site_id": 0, 
+                "provider_id": None,
+                "care_site_id": None, 
                 "person_source_value": source[self.person_source_value],
                 "환자명": source[self.person_name],
                 "gender_source_value": source[self.gender_source_value],
-                "gender_source_concept_id": np.select(gender_conditions, gender_concept_id, default = 0),
+                "gender_source_concept_id": np.select(gender_conditions, gender_concept_id, default = self.no_matching_concept[0]),
                 "race_source_value": source[self.race_source_value],
-                "race_source_concept_id": 0,
+                "race_source_concept_id": self.no_matching_concept[0],
                 "ethnicity_source_value": None,
-                "ethnicity_source_concept_id": 0,
+                "ethnicity_source_concept_id": self.no_matching_concept[0],
                 "혈액형(ABO)": source[self.abotyp],
                 "혈액형(RH)": source[self.rhtyp]
                 })
@@ -470,7 +490,7 @@ class VisitOccurrenceTransformer(DataTransformer):
             logging.debug(f"데이터1 범위 조건 적용 후 원천 데이터 row수: {len(source)}")
 
             # 불러온 원천 전처리
-            source = pd.merge(source, person_data, left_on = self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on = self.person_source_value, right_on="person_source_value", how="inner")
             source = source.drop(columns = ["care_site_id", "provider_id"])
             logging.debug(f"person 테이블과 결합 후 원천 데이터1 row수: {len(source)}")
 
@@ -478,7 +498,7 @@ class VisitOccurrenceTransformer(DataTransformer):
             logging.debug(f"care_site 테이블과 결합 후 원천 데이터1 row수: {len(source)}")
 
             source = pd.merge(source, provider_data, left_on = self.orddr, right_on="provider_source_value", how="left", suffixes=('', '_y'))
-            source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
+            # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
             logging.debug(f"provider 테이블과 결합 후 원천 데이터1 row수: {len(source)}")
 
             source["visit_type_concept_id"] = np.select([source[self.meddept] == "CTC"], [44818519], default = 44818518)
@@ -493,7 +513,7 @@ class VisitOccurrenceTransformer(DataTransformer):
             logging.debug(f"데이터2 범위 조건 적용 후 원천 데이터2 row수: {len(source2)}")
 
             # 불러온 원천2 전처리    
-            source2 = pd.merge(source2, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source2 = pd.merge(source2, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             source2 = source2.drop(columns = ["care_site_id", "provider_id"])
             logging.debug(f"person 테이블과 결합 후 원천 데이터2 row수: {len(source2)}")
 
@@ -525,20 +545,20 @@ class VisitOccurrenceTransformer(DataTransformer):
             cdm_o = pd.DataFrame({
                 "person_id": source["person_id"],
                 "환자명": source["환자명"],
-                "visit_concept_id": np.select([source[self.visit_source_value] == "O"], [9202], default = 0),
+                "visit_concept_id": np.select([source[self.visit_source_value] == "O"], [9202], default = self.no_matching_concept[0]),
                 "visit_start_date": source[self.meddate],
                 "visit_start_datetime": pd.to_datetime(source["visit_start_datetime"], format="%Y%m%d%H%M%S"),
                 "visit_end_date": source[self.meddate],
                 "visit_end_datetime": pd.to_datetime(source["visit_start_datetime"], format="%Y%m%d%H%M%S"),
-                "visit_type_concept_id": np.select([source[self.meddept] == "CTC"], [44818519], default = 44818518),
-                "visit_type_concept_id_name": source["concept_name"],
-                "provider_id": 0,
+                "visit_type_concept_id": np.select([source["visit_type_concept_id"].notna()], [source["visit_type_concept_id"]], default = self.no_matching_concept[0]),
+                "visit_type_concept_id_name": np.select([source["concept_name"].notna()], [source["concept_name"]], default=self.no_matching_concept[1]),
+                "provider_id": source["provider_id"],
                 "care_site_id": source["care_site_id"],
                 "visit_source_value": source[self.visit_source_value],
                 "visit_source_concept_id": 9202,
-                "admitted_from_concept_id": 0,
+                "admitted_from_concept_id": self.no_matching_concept[0],
                 "admitted_from_source_value": None,
-                "discharge_to_concept_id": 0,
+                "discharge_to_concept_id": self.no_matching_concept[0],
                 "discharge_to_source_value": None,
                 "visit_source_key": source["visit_source_key"],
                 "진료과": source[self.meddept],
@@ -560,15 +580,15 @@ class VisitOccurrenceTransformer(DataTransformer):
                 "visit_start_datetime": pd.to_datetime(source2["visit_start_datetime"], format="%Y%m%d%H%M%S"),
                 "visit_end_date": pd.to_datetime(source2[self.dschdate], format="%Y%m%d"),
                 "visit_end_datetime": (source2[self.dschdate] + source2[self.dschtime]).apply(lambda x: datetime.strptime(x, '%Y%m%d%H%M%S')),
-                "visit_type_concept_id": np.select([source2[self.meddept] == "CTC"], [44818519], default = 44818518),
-                "visit_type_concept_id_name": source2["concept_name"],
-                "provider_id": 0,
+                "visit_type_concept_id": np.select([source2["visit_type_concept_id"].notna()], [source2["visit_type_concept_id"]], default = self.no_matching_concept[0]),
+                "visit_type_concept_id_name": np.select([source2["concept_name"].notna()], [source2["concept_name"]], default=self.no_matching_concept[1]),
+                "provider_id": source["provider_id"],
                 "care_site_id": source2["care_site_id"],
                 "visit_source_value": source2[self.visit_source_value],
-                "visit_source_concept_id": np.select(visit_condition, visit_concept_id, default = 0),
-                "admitted_from_concept_id": 0,
+                "visit_source_concept_id": np.select(visit_condition, visit_concept_id, default = self.no_matching_concept[0]),
+                "admitted_from_concept_id": self.no_matching_concept[0],
                 "admitted_from_source_value": source2[self.admitted_from_source_value],
-                "discharge_to_concept_id": 0,
+                "discharge_to_concept_id": self.no_matching_concept[0],
                 "discharge_to_source_value": source2[self.discharge_to_source_value],
                 "visit_source_key": source2["visit_source_key"],
                 "진료과": source2[self.meddept],
@@ -654,7 +674,7 @@ class ConditionOccurrenceTransformer(DataTransformer):
             logging.debug(f"조건 적용후 원천 데이터 row수: {len(source)}")
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             source = source.drop(columns = ["care_site_id", "provider_id"])
             logging.debug(f"person 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
@@ -693,14 +713,14 @@ class ConditionOccurrenceTransformer(DataTransformer):
             cdm = pd.DataFrame({
                 "condition_occurrence_id": source.index + 1,
                 "person_id": source["person_id"],
-                "condition_concept_id": 0,
+                "condition_concept_id": self.no_matching_concept[0],
                 "condition_start_date": source[self.condition_start_datetime].dt.date,
                 "condition_start_datetime": source[self.condition_start_datetime],
                 "condition_end_date": source["visit_end_datetime"].dt.date,
                 "condition_end_datetime": source["visit_end_datetime"],
                 "condition_type_concept_id": None,
                 "condition_type_concept_id_name": None,
-                "condition_status_concept_id": 0,
+                "condition_status_concept_id": self.no_matching_concept[0],
                 "stop_reason": None,
                 "provider_id": source["provider_id"],
                 "주치의명": source["provider_name"],
@@ -708,7 +728,7 @@ class ConditionOccurrenceTransformer(DataTransformer):
                 "visit_detail_id": None,
                 "condition_source_value": source[self.condition_source_value],
                 "진단명": None,
-                "condition_source_concept_id": 0,
+                "condition_source_concept_id": self.no_matching_concept[0],
                 "condition_status_source_value": self.condition_status_source_value,
                 "visit_source_key": source["visit_source_key"],
                 "환자구분": source["visit_source_value"],
@@ -901,7 +921,7 @@ class DrugexposureTransformer(DataTransformer):
             visit_data = visit_data[["visit_occurrence_id", "visit_start_date", "care_site_id", "visit_source_value", "person_id", "visit_source_key"]]
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             logging.info(f"person 테이블과 결합 후 데이터 row수: {len(source)}")
 
             # care_site table과 병합
@@ -919,8 +939,8 @@ class DrugexposureTransformer(DataTransformer):
             logging.info(f"visit_occurrence 테이블과 결합 후 데이터 row수: {len(source)}")
 
             # care_site_id가 없는 경우 0으로 값 입력
-            source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
-            source.loc[source["concept_id"].isna(), "concept_id"] = 0
+            # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
+            # source.loc[source["concept_id"].isna(), "concept_id"] = 0
 
             # drug_type_concept_id_name가져오기
             source["drug_type_concept_id"] = 38000177
@@ -944,20 +964,20 @@ class DrugexposureTransformer(DataTransformer):
             "drug_exposure_id": source.index + 1,
             "person_id": source["person_id"],
             "환자명": source["환자명"],
-            "drug_concept_id": source["concept_id"],
+            "drug_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
             "drug_exposure_start_date": source[self.drug_exposure_start_datetime].dt.date,
             "drug_exposure_start_datetime": source[self.drug_exposure_start_datetime],
-            "drug_exposure_end_date": source[self.drug_exposure_start_datetime].dt.date + pd.to_timedelta(source[self.days_supply].astype(int) + 1, unit = "D"),
-            "drug_exposure_end_datetime": source[self.drug_exposure_start_datetime] + pd.to_timedelta(source[self.days_supply].astype(int) + 1, unit = "D"),
+            "drug_exposure_end_date": source[self.drug_exposure_start_datetime].dt.date + pd.to_timedelta(source[self.days_supply].astype(int)), # + 1, unit = "D"),
+            "drug_exposure_end_datetime": source[self.drug_exposure_start_datetime] + pd.to_timedelta(source[self.days_supply].astype(int)), # + 1, unit = "D"),
             "verbatim_end_date": None,
-            "drug_type_concept_id": source["drug_type_concept_id"],
-            "drug_type_concept_id_name": source["concept_name"],
+            "drug_type_concept_id": np.select([source["drug_type_concept_id"].notna()], [source["drug_type_concept_id"]], default = self.no_matching_concept[0]),
+            "drug_type_concept_id_name": np.select([source["concept_name"].notna()], [source["concept_name"]], default = self.no_matching_concept[1]),
             "stop_reason": None,
             "refills": None,
             "quantity": source[self.days_supply].astype(int) * source[self.qty].astype(float) * source[self.cnt].astype(float),
             "days_supply": source[self.days_supply].astype(int),
             "sig": None,
-            "route_concept_id": 0,
+            "route_concept_id": self.no_matching_concept[0],
             "lot_number": None,
             "provider_id": source["provider_id"],
             "visit_occurrence_id": source["visit_occurrence_id"],
@@ -993,83 +1013,6 @@ class DrugexposureTransformer(DataTransformer):
 
         except Exception as e :
             logging.error(f"{self.table} 테이블 CDM 데이터 변환 중 오류: {e}", exc_info = True)
-
-
-class LocalEDITransformer(DataTransformer):
-    def __init__(self, config_path):
-        super().__init__(config_path)
-        self.table = "local_edi"
-        self.cdm_config = self.config[self.table]
-
-        # 컬럼 변수 재정의      
-        self.order_data = self.cdm_config["data"]["order_data"]
-        self.edi_data = self.cdm_config["data"]["edi_data"]
-        self.concept_data = self.cdm_config["data"]["concept_data"]
-        self.output_filename = self.cdm_config["data"]["output_filename"]
-
-        self.ordercode = self.cdm_config["columns"]["ordercode"]
-        self.engnm = self.cdm_config["columns"]["engnm"]
-        self.tclsnm = self.cdm_config["columns"]["tclsnm"]        
-        
-    def transform(self):
-        """
-        소스 데이터를 읽어들여 CDM 형식으로 변환하고 결과를 CSV 파일로 저장하는 메소드입니다.
-        """
-        try:
-            transformed_data = self.process_source()
-
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
-
-            logging.info(f"{self.table} 테이블 변환 완료")
-            logging.info(f"============================")
-        
-        except Exception as e :
-            logging.error(f"{self.table} 테이블 변환 중 오류:\n {e}", exc_info=True)
-            raise
-
-    def process_source(self):
-        """
-        소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
-        """
-        try : 
-            order_data = self.read_csv(self.order_data, path_type = self.source_flag, dtype = self.source_dtype)
-            edi_data = self.read_csv(self.edi_data, path_type = self.source_flag, dtype = self.source_dtype)
-            concept_data = self.read_csv(self.concept_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            logging.debug(f'원천 데이터 row수: order: {len(order_data)}, edi: {len(edi_data)}')
-
-            # 처방코드 마스터와 수가코드 매핑
-            source = pd.merge(order_data, edi_data, left_on=[self.ordercode, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
-            logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
-
-            # null값에 fromdate, todate 설정
-            source[self.fromdate].fillna("19000101")
-            source[self.todate].fillna("20991231")
-
-            concept_data = concept_data.sort_values(by = ["vocabulary_id"], ascending=[False])
-            concept_data['Sequence'] = concept_data.groupby(["concept_code"]).cumcount() + 1
-            concept_data = concept_data[concept_data["Sequence"] == 1]
-
-            # concept_id 매핑
-            source = pd.merge(source, concept_data, left_on=self.edicode, right_on="concept_code", how="left")
-            logging.debug(f'concept merge후 데이터 row수: {len(source)}')
-
-            # drug의 경우 KCD, EDI 순으로 매핑
-            logging.debug(f'중복되는 concept_id 제거 후 데이터 row수: {len(source)}')
-
-            source = source[[self.ordercode, self.fromdate, self.todate, self.edicode, self.hospital,
-                                 "concept_id", "concept_name", "domain_id", "vocabulary_id", "concept_class_id", 
-                                 "standard_concept", "concept_code", "valid_start_date", "valid_end_date", "invalid_reason"
-                                 ]]
-        
-            logging.debug(f'local_edi row수: {len(source)}')
-            logging.debug(f"요약:\n{source.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
-            logging.debug(f"컬럼별 null 개수:\n{source.isnull().sum().to_string()}")
-
-            return source
-
-        except Exception as e :
-            logging.error(f"{self.table} 테이블 소스 데이터 처리 중 오류:\n {e}", exc_info = True)
 
 
 class MeasurementEDITransformer(DataTransformer):
@@ -1297,7 +1240,7 @@ class MeasurementDiagTransformer(DataTransformer):
             visit_data = visit_data[["visit_occurrence_id", "visit_start_date", "care_site_id", "visit_source_value", "person_id", "visit_source_key"]]
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             del person_data
             logging.debug(f'person 테이블과 결합 후 데이터 row수: {len(source)}')
 
@@ -1320,7 +1263,7 @@ class MeasurementDiagTransformer(DataTransformer):
             logging.debug(f'visit_occurrence 테이블과 결합 후 데이터 row수: {len(source)}')
 
             # 값이 없는 경우 0으로 값 입력
-            source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
+            # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
             source.loc[source["concept_id"].isna(), "concept_id"] = 0
             
             ### unit매핑 작업 ###
@@ -1425,20 +1368,20 @@ class MeasurementDiagTransformer(DataTransformer):
                 "measurement_id": source.index + 1,
                 "person_id": source["person_id"],
                 "환자명": source["환자명"],
-                "measurement_concept_id": source["concept_id"],
+                "measurement_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
                 "measurement_date": np.select(measurement_date_condition, measurement_date_value, default=source[self.orddate].dt.date),
                 "measurement_datetime": np.select(measurement_date_condition, measurement_datetime_value, default=source[self.orddate]),
                 "measurement_time": np.select(measurement_date_condition, measurement_time_value, default=source[self.orddate].dt.time),
-                "measurement_date_type": np.select(measurement_date_condition, ["보고일"], default="처방일"),
-                "measurement_type_concept_id": source["measurement_type_concept_id"],
-                "measurement_type_concept_id_name": source["concept_name_measurement_type"],
-                "operator_concept_id": source["operator_concept_id"],
-                "operator_concept_id_name": source["concept_name_operator"] ,
+                # "measurement_date_type": np.select(measurement_date_condition, ["보고일"], default="처방일"),
+                "measurement_type_concept_id": np.select([source["measurement_type_concept_id"].notna()], [source["measurement_type_concept_id"]], default=self.no_matching_concept[0]),
+                "measurement_type_concept_id_name": np.select([source["concept_name_measurement_type"].notna()], [source["concept_name_measurement_type"]], default=self.no_matching_concept[1]),
+                "operator_concept_id": np.select([source["operator_concept_id"].notna()], [source["operator_concept_id"]], default=self.no_matching_concept[0]),
+                "operator_concept_id_name": np.select([source["concept_name_operator"].notna()], [source["concept_name_operator"]], default=self.no_matching_concept[1]) ,
                 "value_as_number": source["value_as_number"],
-                "value_as_concept_id": source["value_as_concept_id"],
-                "value_as_concept_id_name": source["concept_name_value_as_concept"] ,
-                "unit_concept_id": np.select(unit_id_condition, unit_id_value, default=None),
-                "unit_concept_id_name": np.select(unit_name_condition, unit_name_value, default=None),
+                "value_as_concept_id": np.select([source["value_as_concept_id"].notna()], [source["value_as_concept_id"]], default=self.no_matching_concept[0]),
+                "value_as_concept_id_name": np.select([source["concept_name_value_as_concept"].notna()], [source["concept_name_value_as_concept"]], default=self.no_matching_concept[1]),
+                "unit_concept_id": np.select(unit_id_condition, unit_id_value, default=self.no_matching_concept[0]),
+                "unit_concept_id_name": np.select(unit_name_condition, unit_name_value, default=self.no_matching_concept[1]),
                 "range_low": source[self.range_low],
                 "range_high": source[self.range_high],
                 "provider_id": source["provider_id"],
@@ -1447,7 +1390,7 @@ class MeasurementDiagTransformer(DataTransformer):
                 "visit_detail_id": None,
                 "measurement_source_value": source[self.measurement_source_value],
                 "measurement_source_value_name": source["ORDNM"],
-                "measurement_source_concept_id": source[self.edicode],
+                "measurement_source_concept_id": np.select([source[self.edicode].notna()], [source[self.edicode]], default=self.no_matching_concept[0]),
                 "unit_source_value": source[self.unit_source_value],
                 "value_source_value": source[self.value_source_value].str[:50],
                 "vocabulary_id": "EDI",
@@ -1466,7 +1409,7 @@ class MeasurementDiagTransformer(DataTransformer):
                 "처방순번": source[self.visit_no],
                 "정상치(상)": source[self.range_high],
                 "정상치(하)": source[self.range_low],
-                "나이": None,
+                # "나이": None,
                 "결과내역": source[self.value_source_value]
                 })
 
@@ -1603,7 +1546,7 @@ class MeasurementpthTransformer(DataTransformer):
             visit_data = visit_data[["visit_occurrence_id", "visit_start_date", "care_site_id", "visit_source_value", "person_id", "visit_source_key"]]
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             del person_data
             logging.debug(f'person 테이블과 결합 후 데이터 row수: {len(source)}')
 
@@ -1626,7 +1569,7 @@ class MeasurementpthTransformer(DataTransformer):
             logging.debug(f'visit_occurrence 테이블과 결합 후 데이터 row수: {len(source)}')
 
             # 값이 없는 경우 0으로 값 입력
-            source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
+            # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
             source.loc[source["concept_id"].isna(), "concept_id"] = 0
             
             ### unit매핑 작업 ###
@@ -1730,20 +1673,20 @@ class MeasurementpthTransformer(DataTransformer):
             cdm = pd.DataFrame({
                 "measurement_id": source.index + 1,
                 "person_id": source["person_id"],
-                "measurement_concept_id": source["concept_id"],
+                "measurement_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
                 "measurement_date": np.select(measurement_date_condition, measurement_date_value, default=source[self.orddate].dt.date),
                 "measurement_datetime": np.select(measurement_date_condition, measurement_datetime_value, default=source[self.orddate]),
                 "measurement_time": np.select(measurement_date_condition, measurement_time_value, default=source[self.orddate].dt.time),
-                "measurement_date_type": np.select(measurement_date_condition, ["결과등록일자"], default="처방일"),
-                "measurement_type_concept_id": source["measurement_type_concept_id"],
-                "measurement_type_concept_id_name": source["concept_name"], #source["concept_name_measurement_type"],
-                "operator_concept_id": source["operator_concept_id"],
-                "operator_concept_id_name": source["concept_name_operator"] ,
+                # "measurement_date_type": np.select(measurement_date_condition, ["결과등록일자"], default="처방일"),
+                "measurement_type_concept_id": np.select([source["measurement_type_concept_id"].notna()],[source["measurement_type_concept_id"]], default=self.no_matching_concept[1]),
+                "measurement_type_concept_id_name": np.select([source["concept_name"].notna()], [source["concept_name"]], default=self.no_matching_concept[1]), #source["concept_name_measurement_type"],
+                "operator_concept_id": np.select([source["operator_concept_id"].notna()], [source["operator_concept_id"]], default=self.no_matching_concept[1]),
+                "operator_concept_id_name": np.select([source["concept_name_operator"].notna()], [source["concept_name_operator"]], default=self.no_matching_concept[1]) ,
                 "value_as_number": None,
-                "value_as_concept_id": source["value_as_concept_id"],
-                "value_as_concept_id_name": source["concept_name_value_as_concept"] ,
-                "unit_concept_id": None, 
-                "unit_concept_id_name": None,
+                "value_as_concept_id": np.select([source["value_as_concept_id"].notna()], [source["value_as_concept_id"]], default=self.no_matching_concept[0]),
+                "value_as_concept_id_name": np.select([source["concept_name_value_as_concept"].notna()], [source["concept_name_value_as_concept"]], default=self.no_matching_concept[1]) ,
+                "unit_concept_id": self.no_matching_concept[0], 
+                "unit_concept_id_name": self.no_matching_concept[1],
                 "range_low": self.range_low,
                 "range_high": self.range_high,
                 "provider_id": source["provider_id"],
@@ -1752,7 +1695,7 @@ class MeasurementpthTransformer(DataTransformer):
                 "visit_detail_id": None,
                 "measurement_source_value": source[self.measurement_source_value],
                 "measurement_source_value_name": source["ORDNM"],
-                "measurement_source_concept_id": source[self.edicode],
+                "measurement_source_concept_id": np.select([source[self.edicode].notna()], [source[self.edicode]], default=self.no_matching_concept[0]),
                 "unit_source_value": self.unit_source_value,
                 "value_source_value": source[self.value_source_value].str[:50],
                 "vocabulary_id": "EDI",
@@ -1771,7 +1714,7 @@ class MeasurementpthTransformer(DataTransformer):
                 "처방순번": source[self.visit_no],
                 "정상치(상)": self.range_high,
                 "정상치(하)": self.range_low,
-                "나이": None,
+                # "나이": None,
                 "결과내역": source[self.value_source_value]
                 })
 
@@ -1842,7 +1785,7 @@ class MeasurementVSTransformer(DataTransformer):
             visit_data = visit_data[["visit_occurrence_id", "visit_start_date", "care_site_id", "visit_source_value", "person_id"]]
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             logging.debug(f'person 테이블과 결합 후 원천 데이터 row수: {len(source)}')
 
             # provider table과 병합
@@ -1903,19 +1846,19 @@ class MeasurementVSTransformer(DataTransformer):
                 "measurement_id": source.index + 1,
                 "person_id": source["person_id"],
                 "환자명": source["환자명"],
-                "measurement_concept_id": None,
+                "measurement_concept_id": self.no_matching_concept[0],
                 "measurement_date": source[self.measurement_date].dt.date,
                 "measurement_datetime": source[self.measurement_date],
                 "measurement_time": source[self.measurement_date].dt.time,
-                "measurement_date_type": "기록일시", 
+                # "measurement_date_type": "기록일시", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source["concept_name"],
-                "operator_concept_id": 0,
+                "operator_concept_id": self.no_matching_concept[0],
                 "value_as_number": source["value_as_number"],
-                "value_as_concept_id": None,
-                "value_as_concept_id_name": None,
-                "unit_concept_id": None,
-                "unit_concept_id_name": None,
+                "value_as_concept_id": self.no_matching_concept[0],
+                "value_as_concept_id_name": self.no_matching_concept[1],
+                "unit_concept_id": self.no_matching_concept[0],
+                "unit_concept_id_name": self.no_matching_concept[1],
                 "range_low": None,
                 "range_high": None,
                 "provider_id": None,
@@ -1923,7 +1866,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "visit_detail_id": None,
                 "measurement_source_value": source[self.measurement_source_value],
                 "measurement_source_value_name": source[self.measurement_source_value],
-                "measurement_source_concept_id": None,
+                "measurement_source_concept_id": self.no_matching_concept[0],
                 "unit_source_value": None,
                 "value_source_value": source[self.value_source_value].str[:50],
                 "vocabulary_id": None,
@@ -1942,7 +1885,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
-                "나이": None,
+                # "나이": None,
                 "결과내역": source[self.value_source_value]
                 })
 
@@ -2024,7 +1967,7 @@ class MeasurementNITransformer(DataTransformer):
             visit_data = visit_data[["visit_occurrence_id", "visit_start_date", "care_site_id", "visit_source_value", "person_id"]]
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             logging.debug(f'person 테이블과 결합 후 원천 데이터 row수: {len(source)}')
             
             # care_site table과 병합
@@ -2045,7 +1988,7 @@ class MeasurementNITransformer(DataTransformer):
             logging.debug(f'visit_occurrence 테이블과 결합 후 원천 데이터 row수: {len(source)}')
 
             # 값이 없는 경우 0으로 값 입력
-            source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
+            # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
 
             ### concept_etc테이블과 병합 ###
             concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)            
@@ -2148,14 +2091,14 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_weight[self.admtime].dt.date,
                 "measurement_datetime": source_weight[self.admtime],
                 "measurement_time": source_weight[self.admtime].dt.time,
-                "measurement_date_type": "입원일자", 
+                # "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_weight["concept_name"],
-                "operator_concept_id": 0,
-                "operator_concept_id_name": None,
+                "operator_concept_id": self.no_matching_concept[0],
+                "operator_concept_id_name": self.no_matching_concept[1],
                 "value_as_number": source_weight["value_as_number"],
-                "value_as_concept_id": 0,
-                "value_as_concept_id_name": None,
+                "value_as_concept_id": self.no_matching_concept[0],
+                "value_as_concept_id_name": self.no_matching_concept[1],
                 "unit_concept_id": measurement_concept["weight"][2],
                 "unit_concept_id_name": measurement_concept["weight"][3],
                 "range_low": None,
@@ -2185,7 +2128,7 @@ class MeasurementNITransformer(DataTransformer):
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
-                "나이": None,
+                # "나이": None,
                 "결과내역": source_weight[self.weight]
                 })
 
@@ -2198,14 +2141,14 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_height[self.admtime].dt.date,
                 "measurement_datetime": source_height[self.admtime],
                 "measurement_time": source_height[self.admtime].dt.time, 
-                "measurement_date_type": "입원일자", 
+                # "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_height["concept_name"],
-                "operator_concept_id": 0,
-                "operator_concept_id_name": None,
+                "operator_concept_id": self.no_matching_concept[0],
+                "operator_concept_id_name": self.no_matching_concept[1],
                 "value_as_number": source_height["value_as_number"],
-                "value_as_concept_id": 0,
-                "value_as_concept_id_name": None,
+                "value_as_concept_id": self.no_matching_concept[0],
+                "value_as_concept_id_name": self.no_matching_concept[1],
                 "unit_concept_id": measurement_concept["height"][2],
                 "unit_concept_id_name": measurement_concept["height"][3],
                 "range_low": None,
@@ -2235,7 +2178,7 @@ class MeasurementNITransformer(DataTransformer):
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
-                "나이": None,
+                # "나이": None,
                 "결과내역": source_height[self.height] 
                 })
 
@@ -2248,14 +2191,14 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_bmi[self.admtime].dt.date,
                 "measurement_datetime": source_bmi[self.admtime],
                 "measurement_time": source_bmi[self.admtime].dt.time, 
-                "measurement_date_type": "입원일자", 
+                # "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_bmi["concept_name"],
-                "operator_concept_id": None,
-                "operator_concept_id_name": None,
+                "operator_concept_id": self.no_matching_concept[0],
+                "operator_concept_id_name": self.no_matching_concept[1],
                 "value_as_number": source_bmi["bmi"],
-                "value_as_concept_id": None,
-                "value_as_concept_id_name": None,
+                "value_as_concept_id": self.no_matching_concept[0],
+                "value_as_concept_id_name": self.no_matching_concept[1],
                 "unit_concept_id": measurement_concept["bmi"][2],
                 "unit_concept_id_name": measurement_concept["bmi"][3],
                 "range_low": None,
@@ -2285,7 +2228,7 @@ class MeasurementNITransformer(DataTransformer):
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
-                "나이": None,
+                # "나이": None,
                 "결과내역": source_bmi["bmi"]
                 })
 
@@ -2297,14 +2240,14 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_sbp[self.admtime].dt.date,
                 "measurement_datetime": source_sbp[self.admtime],
                 "measurement_time": source_sbp[self.admtime].dt.time, 
-                "measurement_date_type": "입원일자", 
+                # "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_sbp["concept_name"],
-                "operator_concept_id": None,
-                "operator_concept_id_name": None,
+                "operator_concept_id": self.no_matching_concept[0],
+                "operator_concept_id_name": self.no_matching_concept[1],
                 "value_as_number": source_sbp["value_as_number"],
-                "value_as_concept_id": None,
-                "value_as_concept_id_name": None,
+                "value_as_concept_id": self.no_matching_concept[0],
+                "value_as_concept_id_name": self.no_matching_concept[1],
                 "unit_concept_id": measurement_concept["sbp"][2],
                 "unit_concept_id_name": measurement_concept["sbp"][3],
                 "range_low": None,
@@ -2334,7 +2277,7 @@ class MeasurementNITransformer(DataTransformer):
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
-                "나이": None,
+                # "나이": None,
                 "결과내역": source_sbp[self.sbp]  
                 })
 
@@ -2346,14 +2289,14 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_dbp[self.admtime].dt.date,
                 "measurement_datetime": source_dbp[self.admtime],
                 "measurement_time": source_dbp[self.admtime].dt.time, 
-                "measurement_date_type": "입원일자", 
+                # "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_dbp["concept_name"],
-                "operator_concept_id": None,
-                "operator_concept_id_name": None,
+                "operator_concept_id": self.no_matching_concept[0],
+                "operator_concept_id_name": self.no_matching_concept[1],
                 "value_as_number": source_dbp["value_as_number"],
-                "value_as_concept_id": None,
-                "value_as_concept_id_name": None,
+                "value_as_concept_id": self.no_matching_concept[0],
+                "value_as_concept_id_name": self.no_matching_concept[1],
                 "unit_concept_id": measurement_concept["dbp"][2],
                 "unit_concept_id_name": measurement_concept["dbp"][3],
                 "range_low": None,
@@ -2381,7 +2324,7 @@ class MeasurementNITransformer(DataTransformer):
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
-                "나이": None,
+                # "나이": None,
                 "결과내역": source_dbp[self.dbp] 
                 })
 
@@ -2393,14 +2336,14 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_pulse[self.admtime].dt.date,
                 "measurement_datetime": source_pulse[self.admtime],
                 "measurement_time": source_pulse[self.admtime].dt.time, 
-                "measurement_date_type": "입원일자", 
+                # "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_pulse["concept_name"],
-                "operator_concept_id": None,
-                "operator_concept_id_name": None,
+                "operator_concept_id": self.no_matching_concept[0],
+                "operator_concept_id_name": self.no_matching_concept[1],
                 "value_as_number": source_pulse["value_as_number"],
-                "value_as_concept_id": None,
-                "value_as_concept_id_name": None,
+                "value_as_concept_id": self.no_matching_concept[0],
+                "value_as_concept_id_name": self.no_matching_concept[1],
                 "unit_concept_id": measurement_concept["pulse"][2],
                 "unit_concept_id_name": measurement_concept["pulse"][3],
                 "range_low": None,
@@ -2430,7 +2373,7 @@ class MeasurementNITransformer(DataTransformer):
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
-                "나이": None,
+                # "나이": None,
                 "결과내역": source_pulse[self.pulse]  
                 })
 
@@ -2442,14 +2385,14 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_breth[self.admtime].dt.date,
                 "measurement_datetime": source_breth[self.admtime],
                 "measurement_time": source_breth[self.admtime].dt.time, 
-                "measurement_date_type": "입원일자", 
+                # "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_breth["concept_name"],
-                "operator_concept_id": None,
-                "operator_concept_id_name": None,
+                "operator_concept_id": self.no_matching_concept[0],
+                "operator_concept_id_name": self.no_matching_concept[1],
                 "value_as_number": source_breth["value_as_number"],
-                "value_as_concept_id": None,
-                "value_as_concept_id_name": None,
+                "value_as_concept_id": self.no_matching_concept[0],
+                "value_as_concept_id_name": self.no_matching_concept[1],
                 "unit_concept_id": measurement_concept["breth"][2],
                 "unit_concept_id_name": measurement_concept["breth"][3],
                 "range_low": None,
@@ -2479,7 +2422,7 @@ class MeasurementNITransformer(DataTransformer):
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
-                "나이": None,
+                # "나이": None,
                 "결과내역": source_breth[self.breth]  
                 })
 
@@ -2491,14 +2434,14 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_bdtp[self.admtime].dt.date,
                 "measurement_datetime": source_bdtp[self.admtime],
                 "measurement_time": source_bdtp[self.admtime].dt.time, 
-                "measurement_date_type": "입원일자", 
+                # "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_bdtp["concept_name"],
-                "operator_concept_id": None,
-                "operator_concept_id_name": None,
+                "operator_concept_id": self.no_matching_concept[0],
+                "operator_concept_id_name": self.no_matching_concept[1],
                 "value_as_number": source_bdtp["value_as_number"],
-                "value_as_concept_id": 0,
-                "value_as_concept_id_name": None,
+                "value_as_concept_id": self.no_matching_concept[0],
+                "value_as_concept_id_name": self.no_matching_concept[1],
                 "unit_concept_id": measurement_concept["bdtp"][2],
                 "unit_concept_id_name": measurement_concept["bdtp"][3],
                 "range_low": None,
@@ -2528,7 +2471,7 @@ class MeasurementNITransformer(DataTransformer):
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
-                "나이": None,
+                # "나이": None,
                 "결과내역": source_bdtp[self.bdtp] 
                 })
 
@@ -2540,14 +2483,14 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_date": source_spo2[self.admtime].dt.date,
                 "measurement_datetime": source_spo2[self.admtime],
                 "measurement_time": source_spo2[self.admtime].dt.time, 
-                "measurement_date_type": "입원일자", 
+                # "measurement_date_type": "입원일자", 
                 "measurement_type_concept_id": 44818702,
                 "measurement_type_concept_id_name": source_spo2["concept_name"],
-                "operator_concept_id": None,
-                "operator_concept_id_name": None,
+                "operator_concept_id": self.no_matching_concept[0],
+                "operator_concept_id_name": self.no_matching_concept[1],
                 "value_as_number": source_spo2["value_as_number"],
-                "value_as_concept_id": None,
-                "value_as_concept_id_name": None,
+                "value_as_concept_id": self.no_matching_concept[0],
+                "value_as_concept_id_name": self.no_matching_concept[1],
                 "unit_concept_id": measurement_concept["spo2"][2],
                 "unit_concept_id_name": measurement_concept["spo2"][3],
                 "range_low": None,
@@ -2577,7 +2520,7 @@ class MeasurementNITransformer(DataTransformer):
                 "처방순번": None,
                 "정상치(상)": None,
                 "정상치(하)": None,
-                "나이": None,
+                # "나이": None,
                 "결과내역": source_spo2[self.spo2]
                 })
             logging.debug(f"""weight값이 있는 원천 데이터 row수:\n 
@@ -2860,7 +2803,7 @@ class ProcedurePACSTransformer(DataTransformer):
             logging.debug(f"local_edi 사용기간별 필터 적용 후 데이터 row수: {len(source)}")
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             source = source.drop(columns = ["care_site_id", "provider_id"])
             logging.debug(f'person 테이블과 결합 후 데이터 row수, {len(source)}')
 
@@ -2908,13 +2851,13 @@ class ProcedurePACSTransformer(DataTransformer):
                 "procedure_occurrence_id": source.index + 1,
                 "person_id": source["person_id"],
                 "환자명": source["환자명"],
-                "procedure_concept_id": source["concept_id"],
+                "procedure_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
                 "procedure_date": np.select([source["procedure_datetime"].notna()], [source["procedure_datetime"].dt.date], default = source[self.orddate].dt.date),
                 "procedure_datetime": np.select([source["procedure_datetime"].notna()], [source["procedure_datetime"]], default = source[self.orddate]),
                 "procedure_date_type": np.select([source["procedure_datetime"].notna()], ["판독일시"], default = "처방일"),
-                "procedure_type_concept_id": source["procedure_type_concept_id"],
-                "procedure_type_concept_id_name": source["concept_name"],
-                "modifier_concept_id": None,
+                "procedure_type_concept_id": np.select([source["procedure_type_concept_id"].notna()], [source["procedure_type_concept_id"]], default=self.no_matching_concept[0]),
+                "procedure_type_concept_id_name": np.select([source["concept_name"].notna()], [source["concept_name"]], default=self.no_matching_concept[1]),
+                "modifier_concept_id": self.no_matching_concept[0],
                 "quantity": None,
                 "provider_id": source["provider_id"],
                 "처방의명": source["provider_name"],
@@ -3031,7 +2974,7 @@ class ProcedureBaseOrderTransformer(DataTransformer):
             logging.debug(f"local_edi 사용기간별 필터 적용 후 데이터 row수: {len(source)}")
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             source = source.drop(columns = ["care_site_id", "provider_id"])
             logging.debug(f'person 테이블과 결합 후 데이터 row수, {len(source)}')
 
@@ -3087,18 +3030,18 @@ class ProcedureBaseOrderTransformer(DataTransformer):
                 "procedure_occurrence_id": source.index + 1,
                 "person_id": source["person_id"],
                 "환자명": source["환자명"],
-                "procedure_concept_id": source["concept_id"],
+                "procedure_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
                 "procedure_date": source[self.procedure_date].dt.date,
                 "procedure_datetime": source[self.procedure_date],
                 "procedure_date_type": "처방일",
                 "procedure_type_concept_id": 38000275,
                 "procedure_type_concept_id_name": source["concept_name"],
-                "modifier_concept_id": None,
+                "modifier_concept_id": self.no_matching_concept[0],
                 "quantity": None,
-                "provider_id": None,
+                "provider_id": source["provider_id"],
                 "처방의명": source["provider_name"],
                 "visit_occurrence_id": source["visit_occurrence_id"],
-                "visit_detail_id": 0,
+                "visit_detail_id": None,
                 "procedure_source_value": source[self.procedure_source_value],
                 "procedure_source_value_name": source[self.ordname],
                 "procedure_source_concept_id": source[self.edicode],
@@ -3208,7 +3151,7 @@ class ProcedureBldOrderTransformer(DataTransformer):
             logging.debug(f"local_edi 사용기간별 필터 적용 후 데이터 row수: {len(source)}")
 
             # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="left")
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
             source = source.drop(columns = ["care_site_id", "provider_id"])
             logging.debug(f'person 테이블과 결합 후 데이터 row수, {len(source)}')
 
@@ -3264,18 +3207,18 @@ class ProcedureBldOrderTransformer(DataTransformer):
                 "procedure_occurrence_id": source.index + 1,
                 "person_id": source["person_id"],
                 "환자명": source["환자명"],
-                "procedure_concept_id": source["concept_id"],
+                "procedure_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
                 "procedure_date": source[self.procedure_date].dt.date,
                 "procedure_datetime": source[self.procedure_date],
                 "procedure_date_type": "처방일",
                 "procedure_type_concept_id": 38000275,
                 "procedure_type_concept_id_name": source["concept_name"],
-                "modifier_concept_id": None,
+                "modifier_concept_id": self.no_matching_concept[0],
                 "quantity": None,
-                "provider_id": None,
+                "provider_id": source["provider_id"],
                 "처방의명": source["provider_name"],
                 "visit_occurrence_id": source["visit_occurrence_id"],
-                "visit_detail_id": 0,
+                "visit_detail_id": None,
                 "procedure_source_value": source[self.procedure_source_value],
                 "procedure_source_value_name": source[self.ordname],
                 "procedure_source_concept_id": source[self.edicode],
