@@ -98,6 +98,7 @@ visit_detail:
     meddept: "MEDDEPT"
     provider: "CHADR"
     wardno: "WARDNO"
+    icu_list: ['6002','5002','1005','2008','1002','2002','1003','1004','2003','2004','2007','5004','SI','ICU1','ICU2','ICU3']
 
 local_kcd:
   data: 

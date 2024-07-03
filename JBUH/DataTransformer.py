@@ -673,6 +673,7 @@ class VisitDetailTransformer(DataTransformer):
         self.admitted_from_source_value = self.cdm_config["columns"]["admitted_from_source_value"]
         self.discharge_to_source_value = self.cdm_config["columns"]["discharge_to_source_value"]
         self.wardno = self.cdm_config["columns"]["wardno"]
+        self.icu_list = self.cdm_config["columns"]["icu_list"]
 
     def transform(self):
         """
@@ -707,6 +708,7 @@ class VisitDetailTransformer(DataTransformer):
 
             # 원천에서 조건걸기
             source = source[source["DELYN"]== "N"]
+            source = source[source[self.wardno].isin(self.icu_list)]
             logging.debug(f"조건 적용 후 원천 데이터 row수: {len(source)}, {self.memory_usage}")
 
             # 201903081045같은 데이터가 2019-03-08 10:04:05로 바뀌는 문제 발견 
@@ -1529,7 +1531,9 @@ class MeasurementStexmrstTransformer(DataTransformer):
             source[self.orddate] = pd.to_datetime(source[self.orddate], format="%Y%m%d")
             source[self.exectime] = pd.to_datetime(source[self.exectime], errors = "coerce")
             source = source[(source[self.orddate] <= pd.to_datetime(self.data_range)) & (source[self.measurement_source_value].str[:1].isin(["L", "P"])) ]
-            source = source[~source[self.measurement_source_value].isin(["L999"])]
+            logging.debug(f'L, P만 포함된 후 데이터 row수: {len(source)}, {self.memory_usage}')
+            source = source[~source[self.measurement_source_value].isin(["L9999"])]
+            logging.debug(f'L999제외 후 원천 데이터 row수: {len(source)}, {self.memory_usage}')
             
             # 201903081045같은 데이터가 2019-03-08 10:04:05로 바뀌는 문제 발견하여 분리해서 연결 후 datetime형태로 변경
             # NaN값이 있어 float형 NaN으로 읽는 경우가 있어 .astype(str) 추가
