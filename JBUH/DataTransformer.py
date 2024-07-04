@@ -322,6 +322,8 @@ class PersonTransformer(DataTransformer):
         self.abotyp = self.cdm_config["columns"]["abotyp"]
         self.rhtyp = self.cdm_config["columns"]["rhtyp"]
         self.diagcode = self.cdm_config["columns"]["diagcode"]
+        self.ruleoutyn = self.cdm_config["columns"]["ruleoutyn"]
+        self.diagfg = self.cdm_config["columns"]["diagfg"]
 
     def transform(self):
         """
@@ -363,6 +365,7 @@ class PersonTransformer(DataTransformer):
             if self.diag_condition:
                 condition = self.read_csv(self.source_condition, path_type=self.source_flag, dtype=self.source_dtype)
                 condition = condition[condition[self.diagcode].str.startswith(self.diag_condition, na=False)]
+                condition = condition[(condition[self.diagfg] == 'M') & (~condition[self.ruleoutyn].isin(["Y"]))]
                 condition = condition[self.person_source_value].drop_duplicates()
 
                 source_data = pd.merge(source_data, condition, on=self.person_source_value, how = "inner", suffixes=('', '_diag'))

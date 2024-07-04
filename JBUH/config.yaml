@@ -68,6 +68,8 @@ person:
     rhtyp: RHTYP
     # 상병코드가 있을 경우 상병코드 컬럼 내용
     diagcode: "DIAGCODE"
+    ruleoutyn: "RULEOUTYN"
+    diagfg: "DIAGFG"
 
 visit_occurrence:
   data:
