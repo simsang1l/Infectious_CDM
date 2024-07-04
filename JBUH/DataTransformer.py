@@ -365,8 +365,9 @@ class PersonTransformer(DataTransformer):
             if self.diag_condition:
                 condition = self.read_csv(self.source_condition, path_type=self.source_flag, dtype=self.source_dtype)
                 condition = condition[condition[self.diagcode].str.startswith(self.diag_condition, na=False)]
-                condition = condition[(condition[self.diagfg] == 'M') & (~condition[self.ruleoutyn].isin(["Y"]))]
+                condition = condition[(condition[self.diagfg] == 'M') & (~condition[self.ruleoutyn].isin(["Y"])) & (condition[self.ruleoutyn].notna())]
                 condition = condition[self.person_source_value].drop_duplicates()
+                
 
                 source_data = pd.merge(source_data, condition, on=self.person_source_value, how = "inner", suffixes=('', '_diag'))
 
