@@ -48,6 +48,9 @@ class DataTransformer:
         self.diag_condition = self.config["diag_condition"]
         self.no_matching_concept = self.config["no_matching_concept"]
 
+        # 상병조건이 있다면 조건에 맞는 폴더 생성
+        os.makedirs(os.path.join(self.cdm_path, self.diag_condition ), exist_ok = True)
+
     def load_config(self, config_path):
         """
         YAML 설정 파일을 로드합니다.
@@ -55,34 +58,36 @@ class DataTransformer:
         with open(config_path, 'r', encoding="utf-8") as file:
             return yaml.safe_load(file)
         
-    def read_csv(self, file_name, path_type = 'source', encoding = 'utf-8', dtype = None):
+    def read_csv(self, file_name, path_type = 'source', encoding = None, dtype = None):
         """
         CSV 파일을 읽어 DataFrame으로 반환합니다.
         path_type에 따라 'source' 또는 'CDM' 경로에서 파일을 읽습니다.
         """
         if path_type == "source":
             full_path = os.path.join(self.config["source_path"], file_name + ".csv")
-            encoding = self.source_encoding
+            default_encoding = self.source_encoding
         elif path_type == "CDM":
             if self.diag_condition:
                 full_path = os.path.join(self.config["CDM_path"], self.diag_condition, file_name + ".csv")
             else :
                 full_path = os.path.join(self.config["CDM_path"], file_name + ".csv")
-            encoding = self.cdm_encoding
+            default_encoding = self.cdm_encoding
         else :
             raise ValueError(f"Invalid path type: {path_type}")
         
+        encoding = encoding if encoding else default_encoding
+
         return pd.read_csv(full_path, dtype = dtype, encoding = encoding)
 
-    def write_csv(self, df, file_path, encoding = 'utf-8'):
+    def write_csv(self, df, file_path, filename, encoding = 'utf-8'):
         """
         DataFrame을 CSV 파일로 저장합니다.
         """
         encoding = self.cdm_encoding
         if self.diag_condition:
-            df.to_csv(os.path.join(file_path, self.diag_condition, file_path + ".csv"), encoding = encoding, index = False)
+            df.to_csv(os.path.join(file_path, self.diag_condition, filename + ".csv"), encoding = encoding, index = False)
         else:
-            df.to_csv(os.path.join(file_path, file_path + ".csv"), encoding = encoding, index = False)
+            df.to_csv(os.path.join(file_path, filename + ".csv"), encoding = encoding, index = False)
 
     def transform(self):
         """
@@ -147,8 +152,8 @@ class CareSiteTransformer(DataTransformer):
             # 데이터 변환
             transformed_data = self.transform_cdm(source_data, location)
             # CSV 파일로 저장
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             # 로그에 변환 완료 메시지 기록
             logging.info(f"{self.table} 테이블 변환 완료")
@@ -167,7 +172,7 @@ class CareSiteTransformer(DataTransformer):
             source_data = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
             logging.debug(f"원천 데이터 row수: {len(source_data)}")
 
-            location = self.read_csv(self.location_data, path_type = self.cdm_flag, dtype = self.source_dtype)
+            location = self.read_csv(self.location_data, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             return source_data, location
 
         except Exception as e:
@@ -190,7 +195,7 @@ class CareSiteTransformer(DataTransformer):
             })
 
             logging.debug(f"CDM 데이터 row수: {len(cdm)}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
             
             return cdm
@@ -221,8 +226,8 @@ class ProviderTransformer(DataTransformer):
         try:
             source_data = self.process_source()
             transformed_data = self.transform_cdm(source_data)
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -285,7 +290,7 @@ class ProviderTransformer(DataTransformer):
                 })
 
             logging.debug(f"CDM 데이터 row수: {len(cdm)}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
 
             return cdm   
@@ -322,8 +327,8 @@ class PersonTransformer(DataTransformer):
             source_data = self.process_source()
             transformed_data = self.transform_cdm(source_data)
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -338,7 +343,7 @@ class PersonTransformer(DataTransformer):
         """
         try:
             source_data = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
-            location_data = self.read_csv(self.location_data, path_type = self.cdm_flag, dtype = self.source_dtype)
+            location_data = self.read_csv(self.location_data, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f"원천 데이터 row수: {len(source_data)}")
             
             source_data = pd.merge(source_data, location_data, left_on = self.location_source_value, right_on="LOCATION_SOURCE_VALUE", how = "left")
@@ -408,7 +413,7 @@ class PersonTransformer(DataTransformer):
             cdm["death_datetime"] = cdm["death_datetime"].dt.strftime('%Y-%m-%d %H:%M:%S')
 
             logging.debug(f"CDM 데이터 row수: {len(cdm)}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
 
             return cdm   
@@ -457,8 +462,8 @@ class VisitOccurrenceTransformer(DataTransformer):
             source_data, source_data2 = self.process_source()
             transformed_data = self.transform_cdm(source_data, source_data2)
 
-            save_path = os.path.join(self.config["CDM_path"], self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.config["CDM_path"], self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -479,7 +484,7 @@ class VisitOccurrenceTransformer(DataTransformer):
             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag , dtype = self.source_dtype)
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f"원천 데이터 row수: source: {len(source)}, source2: {len(source2)}")
 
             # 원천 데이터 범위 설정
@@ -605,7 +610,7 @@ class VisitOccurrenceTransformer(DataTransformer):
             cdm = cdm[self.columns]
             
             logging.debug(f"CDM 데이터 row수: {len(cdm)}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
 
             return cdm   
@@ -642,8 +647,8 @@ class ConditionOccurrenceTransformer(DataTransformer):
             transformed_data = self.transform_cdm(source_data)
 
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -742,7 +747,7 @@ class ConditionOccurrenceTransformer(DataTransformer):
             cdm["condition_end_datetime"] = pd.to_datetime(cdm["condition_end_datetime"], errors = "coerce")
 
             logging.debug(f"CDM 데이터 row수: {len(cdm)}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
 
             return cdm   
@@ -779,8 +784,8 @@ class DrugEDITransformer(DataTransformer):
         try:
             transformed_data = self.process_source()
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -795,8 +800,8 @@ class DrugEDITransformer(DataTransformer):
         """
         try : 
             source = self.read_csv(self.order_data, path_type = self.source_flag, dtype = self.source_dtype)
-            concept_data = self.read_csv(self.concept_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            atc_data = self.read_csv(self.atc_data, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_data = self.read_csv(self.concept_data, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
+            atc_data = self.read_csv(self.atc_data, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f'원천 데이터 row수: order: {len(source)}')
 
             # concept_id 매핑
@@ -821,7 +826,7 @@ class DrugEDITransformer(DataTransformer):
             # logging.debug(f'중복되는 concept_id 제거 후 데이터 row수: {len(source)}')
         
             logging.debug(f'local_edi row수: {len(source)}')
-            logging.debug(f"요약:\n{source.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{source.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{source.isnull().sum().to_string()}")
 
             return source
@@ -864,8 +869,8 @@ class DrugexposureTransformer(DataTransformer):
             transformed_data = self.transform_cdm(source_data)
 
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -885,7 +890,7 @@ class DrugexposureTransformer(DataTransformer):
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
 
             logging.info(f"원천 데이터 row수:, {len(source)}")
 
@@ -1006,7 +1011,7 @@ class DrugexposureTransformer(DataTransformer):
             })
 
             logging.info(f"CDM테이블 row수: {len(cdm)}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
 
             return cdm   
@@ -1043,8 +1048,8 @@ class MeasurementEDITransformer(DataTransformer):
         try:
             transformed_data = self.process_source()
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -1060,7 +1065,7 @@ class MeasurementEDITransformer(DataTransformer):
         try : 
             order_data = self.read_csv(self.order_data, path_type = self.source_flag, dtype = self.source_dtype)
             edi_data = self.read_csv(self.edi_data, path_type = self.source_flag, dtype = self.source_dtype)
-            concept_data = self.read_csv(self.concept_data, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_data = self.read_csv(self.concept_data, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f'원천 데이터 row수: order: {len(order_data)}, edi: {len(edi_data)}')
             
             # 처방코드 마스터와 수가코드 매핑
@@ -1094,7 +1099,7 @@ class MeasurementEDITransformer(DataTransformer):
             #                      ]]
         
             logging.debug(f'local_edi row수: {len(source)}')
-            logging.debug(f"요약:\n{source.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{source.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{source.isnull().sum().to_string()}")
 
             return source
@@ -1137,8 +1142,8 @@ class MeasurementDiagTransformer(DataTransformer):
             transformed_data = self.transform_cdm(source_data)
 
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -1161,9 +1166,9 @@ class MeasurementDiagTransformer(DataTransformer):
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            unit_data = self.read_csv(self.concept_unit, path_type = self.cdm_flag , dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
-            unit_concept_synonym = self.read_csv(self.unit_concept_synonym, path_type = self.cdm_flag, dtype = self.source_dtype)
+            unit_data = self.read_csv(self.concept_unit, path_type = self.source_flag , dtype = self.source_dtype, encoding=self.cdm_encoding)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
+            unit_concept_synonym = self.read_csv(self.unit_concept_synonym, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f'원천 데이터 row수: {len(source1)}, {len(source2)}, {len(source3)}, {len(source4)}')
 
             # 원천에서 조건걸기
@@ -1414,7 +1419,7 @@ class MeasurementDiagTransformer(DataTransformer):
                 })
 
             logging.debug(f'CDM 데이터 row수: {len(cdm)}')
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
 
             return cdm   
@@ -1456,8 +1461,8 @@ class MeasurementpthTransformer(DataTransformer):
             transformed_data = self.transform_cdm(source_data)
 
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -1480,9 +1485,9 @@ class MeasurementpthTransformer(DataTransformer):
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            unit_data = self.read_csv(self.concept_unit, path_type = self.cdm_flag , dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag , dtype = self.source_dtype)
-            unit_concept_synonym = self.read_csv(self.unit_concept_synonym, path_type = self.cdm_flag , dtype = self.source_dtype)
+            # unit_data = self.read_csv(self.concept_unit, path_type = self.source_flag , dtype = self.source_dtype, encoding=self.cdm_encoding)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag , dtype = self.source_dtype, encoding=self.cdm_encoding)
+            # unit_concept_synonym = self.read_csv(self.unit_concept_synonym, path_type = self.source_flag , dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f'원천 데이터 row수: {len(source1)}, {len(source2)}, {len(source3)}, {len(source4)}')
 
             # 원천에서 조건걸기
@@ -1719,7 +1724,7 @@ class MeasurementpthTransformer(DataTransformer):
                 })
 
             logging.debug(f'CDM 데이터 row수: {len(cdm)}')
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
 
             return cdm   
@@ -1751,8 +1756,8 @@ class MeasurementVSTransformer(DataTransformer):
             transformed_data = self.transform_cdm(source_data)  
 
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -1770,7 +1775,7 @@ class MeasurementVSTransformer(DataTransformer):
             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             # provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f'원천 데이터 row수: {len(source)}')
 
             source["visit_source_key"] = source[self.person_source_value] + source[self.orddd]
@@ -1890,7 +1895,7 @@ class MeasurementVSTransformer(DataTransformer):
                 })
 
             logging.debug(f'CDM 데이터 row수: {len(cdm)}')
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
 
             return cdm   
@@ -1928,8 +1933,8 @@ class MeasurementNITransformer(DataTransformer):
             transformed_data = self.transform_cdm(source_data)  
 
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -1948,7 +1953,7 @@ class MeasurementNITransformer(DataTransformer):
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f'원천 데이터 row수: {len(source)}')
 
             # 원천에서 조건걸기
@@ -2541,7 +2546,7 @@ class MeasurementNITransformer(DataTransformer):
             cdm = pd.concat([cdm_weight, cdm_height, cdm_bmi, cdm_sbp, cdm_dbp, cdm_pulse, cdm_breth, cdm_bdtp, cdm_spo2], axis = 0, ignore_index=True)
 
             logging.debug(f'CDM 데이터 row수: {len(cdm)}')
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
 
             return cdm   
@@ -2569,8 +2574,8 @@ class MergeMeasurementTransformer(DataTransformer):
         try : 
             transformed_data = self.process_source()
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -2634,8 +2639,8 @@ class ProcedureEDITransformer(DataTransformer):
         try:
             transformed_data = self.process_source()
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -2651,7 +2656,7 @@ class ProcedureEDITransformer(DataTransformer):
         try : 
             order_data = self.read_csv(self.order_data, path_type = self.source_flag, dtype = self.source_dtype)
             edi_data = self.read_csv(self.edi_data, path_type = self.source_flag, dtype = self.source_dtype)
-            concept_data = self.read_csv(self.concept_data, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_data = self.read_csv(self.concept_data, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f'원천 데이터 row수: order: {len(order_data)}, edi: {len(edi_data)}')
             
             # 처방코드 마스터와 수가코드 매핑
@@ -2678,7 +2683,7 @@ class ProcedureEDITransformer(DataTransformer):
             #                      ]]
         
             logging.debug(f'local_edi row수: {len(source)}')
-            logging.debug(f"요약:\n{source.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{source.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{source.isnull().sum().to_string()}")
 
             return source
@@ -2715,8 +2720,8 @@ class ProcedurePACSTransformer(DataTransformer):
             transformed_data = self.transform_cdm(source_data)
 
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -2738,7 +2743,7 @@ class ProcedurePACSTransformer(DataTransformer):
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f"원천 데이터 row수: 검사처방: {len(source1)}, 처방상세: {len(source2)}, 영상검사결과: {len(source3)}")
 
             # 원천에서 조건걸기
@@ -2888,7 +2893,7 @@ class ProcedurePACSTransformer(DataTransformer):
                 })
 
             logging.debug(f'CDM 데이터 row수, {len(cdm)}')
-            logging.debug(f"요약:\n{source.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{source.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
 
             return cdm   
@@ -2922,8 +2927,8 @@ class ProcedureBaseOrderTransformer(DataTransformer):
             transformed_data = self.transform_cdm(source_data)
 
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -2943,7 +2948,7 @@ class ProcedureBaseOrderTransformer(DataTransformer):
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f"원천 데이터 row수: {len(source)}")
 
             # 원천에서 조건걸기
@@ -3067,7 +3072,7 @@ class ProcedureBaseOrderTransformer(DataTransformer):
                 })
 
             logging.debug(f'CDM 데이터 row수, {len(cdm)}')
-            logging.debug(f"요약:\n{source.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{source.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
 
             return cdm   
@@ -3101,8 +3106,8 @@ class ProcedureBldOrderTransformer(DataTransformer):
             transformed_data = self.transform_cdm(source_data)
 
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -3122,7 +3127,7 @@ class ProcedureBldOrderTransformer(DataTransformer):
             provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.cdm_flag, dtype = self.source_dtype)
+            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f"원천 데이터 row수: {len(source)}")
 
             # 원천에서 조건걸기
@@ -3244,7 +3249,7 @@ class ProcedureBldOrderTransformer(DataTransformer):
                 })
 
             logging.debug(f'CDM 데이터 row수, {len(cdm)}')
-            logging.debug(f"요약:\n{source.describe(include = 'all', datetime_is_numeric=True).T.to_string()}")
+            logging.debug(f"요약:\n{source.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
 
             return cdm   
@@ -3271,8 +3276,8 @@ class MergeProcedureTransformer(DataTransformer):
         try : 
             transformed_data = self.process_source()
 
-            save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, save_path)
+            # save_path = os.path.join(self.cdm_path, self.output_filename)
+            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
             logging.info(f"{self.table} 테이블 변환 완료")
             logging.info(f"============================")
@@ -3327,8 +3332,8 @@ class ObservationPeriodTransformer(DataTransformer):
         """
         transformed_data = self.process_source()
 
-        save_path = os.path.join(self.cdm_path, self.output_filename)
-        self.write_csv(transformed_data, save_path)
+        # save_path = os.path.join(self.cdm_path, self.output_filename)
+        self.write_csv(transformed_data, self.cdm_path, self.output_filename)
 
         logging.info(f"{self.table} 테이블 변환 완료")
         logging.info(f"============================")

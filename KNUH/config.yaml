@@ -25,7 +25,7 @@ todate: "TODATE"
 visit_no: "CRETNO"
 sheet_meta: "메타데이터진단"
 # diag_condition ex. 'A9380' 'A753' 'A31'
-diag_condition: ""
+diag_condition: "A9380"
 no_matching_concept: [0, "No matching concept"]
 
 # DQ

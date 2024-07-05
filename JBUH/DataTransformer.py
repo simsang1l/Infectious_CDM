@@ -58,22 +58,24 @@ class DataTransformer:
         with open(config_path, 'r', encoding="utf-8") as file:
             return yaml.safe_load(file)
         
-    def read_csv(self, file_name, path_type = 'source', encoding = 'utf-8', dtype = None):
+    def read_csv(self, file_name, path_type = 'source', encoding = None, dtype = None):
         """
         CSV 파일을 읽어 DataFrame으로 반환합니다.
         path_type에 따라 'source' 또는 'CDM' 경로에서 파일을 읽습니다.
         """
         if path_type == "source":
             full_path = os.path.join(self.config["source_path"], file_name + ".csv")
-            encoding = self.source_encoding
+            default_encoding = self.source_encoding
         elif path_type == "CDM":
             if self.diag_condition :
                 full_path = os.path.join(self.config["CDM_path"], self.diag_condition , file_name + ".csv")
             else :
                 full_path = os.path.join(self.config["CDM_path"], file_name + ".csv")
-            encoding = self.cdm_encoding
+            default_encoding = self.cdm_encoding
         else :
             raise ValueError(f"Invalid path type: {path_type}")
+        
+        encoding = encoding if encoding else default_encoding
         
         return pd.read_csv(full_path, dtype = dtype, encoding = encoding)
 
@@ -193,7 +195,7 @@ class CareSiteTransformer(DataTransformer):
             })
 
             logging.debug(f"CDM 데이터 row수: {len(cdm)}, {self.memory_usage}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}, {self.memory_usage}")
             
             return cdm
@@ -295,7 +297,7 @@ class ProviderTransformer(DataTransformer):
                 })
 
             logging.debug(f"CDM 데이터 row수: {len(cdm)}, {self.memory_usage}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}, {self.memory_usage}")
 
             return cdm   
@@ -428,7 +430,7 @@ class PersonTransformer(DataTransformer):
             cdm["death_datetime"] = cdm["death_datetime"].dt.strftime('%Y-%m-%d %H:%M:%S')
 
             logging.debug(f"CDM 데이터 row수: {len(cdm)}, {self.memory_usage}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}, {self.memory_usage}")
 
             return cdm   
@@ -640,7 +642,7 @@ class VisitOccurrenceTransformer(DataTransformer):
             cdm = cdm[self.columns]
             
             logging.debug(f"CDM 데이터 row수: {len(cdm)}, {self.memory_usage}")
-            logging.debug(f"요약(문자형_data):\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약(문자형_data):\n{cdm.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}, {self.memory_usage}")
 
             return cdm   
@@ -818,7 +820,7 @@ class VisitDetailTransformer(DataTransformer):
             cdm = cdm[self.columns]
 
             logging.debug(f"CDM 데이터 row수: {len(cdm)}, {self.memory_usage}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}, {self.memory_usage}")
 
             return cdm   
@@ -921,7 +923,7 @@ class LocalKCDTransformer(DataTransformer):
             local_kcd = local_kcd.sort_values(self.diagcode)
 
             logging.debug(f'local_kcd row수: {len(local_kcd)}, {self.memory_usage}')
-            logging.debug(f"요약:\n{local_kcd.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{local_kcd.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{local_kcd.isnull().sum().to_string()}, {self.memory_usage}")
 
             return local_kcd
@@ -1124,7 +1126,7 @@ class ConditionOccurrenceTransformer(DataTransformer):
             cdm["condition_end_datetime"] = pd.to_datetime(cdm["condition_end_datetime"], errors = "coerce")
 
             logging.debug(f"CDM 데이터 row수: {len(cdm)}, {self.memory_usage}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}, {self.memory_usage}")
 
             return cdm   
@@ -1232,7 +1234,7 @@ class LocalEDITransformer(DataTransformer):
             
 
             logging.debug(f'local_edi row수: {len(local_edi)}, {self.memory_usage}')
-            logging.debug(f"요약:\n{local_edi.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{local_edi.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{local_edi.isnull().sum().to_string()}, {self.memory_usage}")
 
             return local_edi
@@ -1446,7 +1448,7 @@ class DrugexposureTransformer(DataTransformer):
             })
 
             logging.info(f"CDM테이블 row수: {len(cdm)}, {self.memory_usage}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}, {self.memory_usage}")
 
             return cdm   
@@ -1767,7 +1769,7 @@ class MeasurementStexmrstTransformer(DataTransformer):
                 })
 
             logging.debug(f'CDM 데이터 row수: {len(cdm)}, {self.memory_usage}')
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}, {self.memory_usage}")
 
             return cdm   
@@ -2627,7 +2629,7 @@ class MeasurementVSTransformer(DataTransformer):
             cdm = pd.concat([cdm_weight, cdm_height, cdm_bmi, cdm_sbp, cdm_dbp, cdm_pr, cdm_rr, cdm_bt, cdm_spo2], axis = 0, ignore_index=True)
 
             logging.debug(f'CDM 데이터 row수: {len(cdm)}, {self.memory_usage}')
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}, {self.memory_usage}")
 
             return cdm   
@@ -2898,7 +2900,7 @@ class ProcedureOrderTransformer(DataTransformer):
             cdm["procedure_datetime"] = pd.to_datetime(cdm["procedure_datetime"])
 
             logging.debug(f'CDM 데이터 row수, {len(cdm)}, {self.memory_usage}')
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}, {self.memory_usage}")
 
             return cdm   
@@ -3129,7 +3131,7 @@ class ProcedureStexmrstTransformer(DataTransformer):
             cdm["procedure_datetime"] = pd.to_datetime(cdm["procedure_datetime"])
 
             logging.debug(f'CDM 데이터 row수: {len(cdm)}, {self.memory_usage}')
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}, {self.memory_usage}")
 
             return cdm   
@@ -3280,7 +3282,7 @@ class ObservationPeriodTransformer(DataTransformer):
             })  
 
             logging.debug(f"CDM 데이터 row수 {len(cdm)}, {self.memory_usage}")
-            logging.debug(f"요약:\n{cdm.describe(include = 'all', datetime_is_numeric=True).T.to_string()}, {self.memory_usage}")
+            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}, {self.memory_usage}")
             logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}, {self.memory_usage}")
 
             return cdm
