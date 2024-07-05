@@ -587,7 +587,7 @@ class VisitOccurrenceTransformer(DataTransformer):
                 "visit_end_datetime": (source2[self.dschdate] + source2[self.dschtime]).apply(lambda x: datetime.strptime(x, '%Y%m%d%H%M%S')),
                 "visit_type_concept_id": np.select([source2["visit_type_concept_id"].notna()], [source2["visit_type_concept_id"]], default = self.no_matching_concept[0]),
                 "visit_type_concept_id_name": np.select([source2["concept_name"].notna()], [source2["concept_name"]], default=self.no_matching_concept[1]),
-                "provider_id": source["provider_id"],
+                "provider_id": source2["provider_id"],
                 "care_site_id": source2["care_site_id"],
                 "visit_source_value": source2[self.visit_source_value],
                 "visit_source_concept_id": np.select(visit_condition, visit_concept_id, default = self.no_matching_concept[0]),
