@@ -1,5 +1,5 @@
-source_path: "F:\\01.감염병데이터베이스\\data\\knuh\\emr"
-CDM_path: "F:\\01.감염병데이터베이스\\data\\knuh\\cdm"
+source_path: "C:\\work\\jbcd\\knuh_sample\\sample"
+CDM_path: "C:\\work\\jbcd\\knuh_sample\\cdm"
 source_encoding: "cp949"
 cdm_encoding: "utf-8-sig"
 source_dtype: "str"
@@ -16,6 +16,8 @@ person_source_value: "PID"
 location_data: "location"
 concept_unit: "concept_unit"
 concept_etc: "concept_etc"
+concept_kcd: "concept_kcd7"
+local_kcd_data: "local_kcd"
 unit_concept_synonym: unit_concept_synonym
 hospital: "INSTCD"
 drug_edi_data: "drug_edi"
@@ -36,7 +38,7 @@ sheet_dq: "점검사항"
 
 care_site:
   data:
-    source_data: "18.PMCMPTBS_부서코드마스터"
+    source_data: "18.ZSDDDEPT_부서코드마스터"
     output_filename: "care_site"
   columns:
     care_site_name: "INORDDEPTNM"
@@ -72,11 +74,12 @@ person:
     rhtyp: "RH"
     # 상병코드가 있을 경우 상병코드 컬럼 내용
     diagcode: "DIAGCD"
+    ruleout: DIAGKINDCD
 
 visit_occurrence:
   data:
-    source_data: "20.PMOHOTPT_외래환자예약"
-    source_data2: "16.PMIHINPT_환자입원이력"
+    source_data: "20.PMOHOTPT_외래수진이력"
+    source_data2: "16.PMIHINPT_입원수진이력"
     output_filename: "visit_occurrence"
   columns:
     admitted_from_source_value: "INPATH"
@@ -92,6 +95,43 @@ visit_occurrence:
     orddr: "ORDDRID"
     chadr: "ATDOCTID"
 
+visit_detail:
+  data:
+   source_data: "29.PMIHICDR_전과전실"
+   output_filename: "visit_detail"
+  columns:
+    visit_detail_start_datetime: "FROMDD"
+    visit_detail_end_datetime: "TODD"
+    visit_detail_source_value: "ROOMCD"
+    admitted_from_source_value: NULL
+    discharge_to_source_value: NULL
+    meddept: "ORDDEPTCD"
+    provider: "ATDOCTID"
+    wardno: "WARDCD"
+    admdate: "INDD"
+
+local_kcd:
+  data: 
+    source: "30.MRTMTERM_진단용어"
+    output_filename: local_kcd
+  columns:
+    diagcode: TERMCD
+    fromdate: TERMFROMDD
+    todate: TERMTODD
+    engname: TERMENGNM
+    korname: TERMHNGNM
+    # columns in concept table
+    concept_id: concept_id
+    concept_name: concept_name
+    domain_id: domain_id
+    vocabulary_id: vocabulary_id
+    concept_class_id: concept_class_id
+    standard_concept: standard_concept
+    concept_code: concept_code
+    valid_start_date: valid_start_date
+    valid_end_date: valid_end_date
+    invalid_reason: invalid_reason
+
 condition_occurrence:
   data:
     source_data: "12.MMOHDIAG_진단정보"
@@ -105,6 +145,12 @@ condition_occurrence:
     condition_status_source_value: null
     orddd: "ORDDD"
     diagfg: DIAGTYPECD
+    ruleout: DIAGKINDCD
+    # local_kcd파일의 컬럼 정의
+    diagcode: TERMCD
+    fromdate: TERMFROMDD
+    todate: TERMTODD
+    engname: TERMENGNM
 
 drug_edi:
   data:
@@ -124,8 +170,9 @@ drug_edi:
     edi_todate: "취소일자"
 
 drug_exposure:
+# 경북대 팀장님이 실제 의사 화면에 보이는 데이터만 추출해주심
   data:
-    source_data: "08.MMOHIPRC_약처방정보"
+    source_data: "08.MMOHOIPRC_약처방정보"
     output_filename: "drug_exposure"
   columns:
     drugcd: "DRUGCD"
@@ -178,8 +225,8 @@ measurement_edi:
 
 measurement_diag:
   data:
-    source_data1: "02.MMOHIPRC_검사처방"
-    source_data2: "28.MMODEXIP_처방상세"
+    source_data1: "02.MMOHOIPRC_검사처방"
+    source_data2: "28.MMODEXOIP_처방상세"
     source_data3: "25.LLCHSBGD_진단검사접수"
     source_data4: "11.LLRHSPDO_진단검사결과"
     output_filename: "measurement_diag"
@@ -200,9 +247,9 @@ measurement_diag:
 measurement_pth:
   data:
     source_data1: "03.LPRMRSLT_병리검사결과"
-    source_data2: "27.LPRMCNTSD_병리검사결과"
+    source_data2: "04.LPRMCNTS_병리검사결과내용"
     source_data3: "26.LPJMACPT_병리접수"
-    source_data4: "02.MMOHIPRC_검사처방"
+    source_data4: "02.MMOHOIPRC_검사처방"
     output_filename: "measurement_pth"
   columns:
     meddept: "ORDDEPTCD"
@@ -272,9 +319,9 @@ procedure_edi:
 
 procedure_pacs:
   data:
-    source_data1: "02.MMOHIPRC_검사처방"
-    source_data2: "28.MMODEXIP_처방상세"
-    source_data3: "09.MMOHIPRC_영상검사결과"
+    source_data1: "02.MMOHOIPRC_검사처방"
+    source_data2: "28.MMODEXOIP_처방상세"
+    source_data3: "09.PACSRPTH_영상검사결과"
     output_filename: "procedure_pacs"
   columns:
     meddept: "ORDDEPTCD"
@@ -312,8 +359,8 @@ procedure_bldorder:
 merge_procedure:
   data:
     source_data1: "procedure_pacs"
-    source_data2: "procedure_baseorder"
-    source_data3: "procedure_bldorder"
+    source_data2: "" #"procedure_baseorder"
+    source_data3: "" #"procedure_bldorder"
     output_filename: "procedure_occurrence"
 
 observation_period:

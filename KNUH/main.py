@@ -19,6 +19,12 @@ if __name__ == "__main__":
         visit_occurrence = VisitOccurrenceTransformer(config)    
         visit_occurrence.transform()
 
+        visit_detail = VisitDetailTransformer(config)    
+        visit_detail.transform()
+
+        local_kcd = LocalKCDTransformer(config)    
+        local_kcd.transform()
+
         condition_occurrence = ConditionOccurrenceTransformer(config)    
         condition_occurrence.transform()
 
@@ -52,11 +58,11 @@ if __name__ == "__main__":
         procedure_pacs = ProcedurePACSTransformer(config)
         procedure_pacs.transform()
 
-        procedure_baseorder = ProcedureBaseOrderTransformer(config)
-        procedure_baseorder.transform()
+        ## procedure_baseorder = ProcedureBaseOrderTransformer(config)
+        ## procedure_baseorder.transform()
 
-        procedure_bldorder = ProcedureBldOrderTransformer(config)
-        procedure_bldorder.transform()
+        ## procedure_bldorder = ProcedureBldOrderTransformer(config)
+        ## procedure_bldorder.transform()
 
         merge_procedure = MergeProcedureTransformer(config)
         merge_procedure.transform()
