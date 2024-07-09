@@ -319,7 +319,7 @@ class PersonTransformer(DataTransformer):
         self.rhtyp = self.cdm_config["columns"]["rhtyp"]
         self.source_condition = self.cdm_config["data"]["source_condition"]
         self.diagcode = self.cdm_config["columns"]["diagcode"]
-        self.ruleout = self.cdm_encoding["columns"]["ruleout"]
+        self.ruleout = self.cdm_config["columns"]["ruleout"]
 
 
     def transform(self):
@@ -494,7 +494,7 @@ class VisitOccurrenceTransformer(DataTransformer):
             # 원천 데이터 범위 설정
             source["visit_start_datetime"] = source[self.meddate] + source[self.medtime]
             source[self.meddate] = pd.to_datetime(source[self.meddate])
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.meddate].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.meddate].dt.strftime("%Y%m%d") + ';' + source[self.visit_no] + ';' + source[self.hospital]
             source = source[source[self.meddate] <= self.data_range]
             logging.debug(f"데이터1 범위 조건 적용 후 원천 데이터 row수: {len(source)}")
 
@@ -517,7 +517,7 @@ class VisitOccurrenceTransformer(DataTransformer):
             # 원천 데이터2 범위 설정
             source2["visit_start_datetime"] = source2[self.admdate] + source2[self.admtime]
             source2[self.admdate] = pd.to_datetime(source2[self.admdate])
-            source2["visit_source_key"] = source2[self.person_source_value] + source2[self.meddept] + source2[self.admdate].dt.strftime("%Y%m%d") + source2[self.visit_no] + source2[self.hospital]
+            source2["visit_source_key"] = source2[self.person_source_value] + ';' + source2[self.admdate].dt.strftime("%Y%m%d") + ';' + source2[self.visit_no] + ';' + source2[self.hospital]
             source2 = source2[source2[self.admdate] <= self.data_range]
             logging.debug(f"데이터2 범위 조건 적용 후 원천 데이터2 row수: {len(source2)}")
 
@@ -686,7 +686,7 @@ class VisitDetailTransformer(DataTransformer):
 
             # visit_source_key 생성
             source[self.admdate] = pd.to_datetime(source[self.admdate])
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.admdate].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
+            source["visit_source_key"] = source[self.person_source_value] +  ';' + source[self.admdate].dt.strftime("%Y%m%d") + ';' + source[self.visit_no] + ';' + source[self.hospital]
             
             # # 201903081045같은 데이터가 2019-03-08 10:04:05로 바뀌는 문제 발견 
             # def convert_datetime_format(x):
@@ -723,7 +723,7 @@ class VisitDetailTransformer(DataTransformer):
             source["visit_detail_type_concept_id"] = 44818518
             concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)
             source = pd.merge(source, concept_etc, left_on="visit_detail_type_concept_id", right_on='concept_id')
-            logging.debug(f"CDM 테이블과 결합 후 원천 데이터 row수: {len(source)}")
+            logging.debug(f"concept_etc 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
             # 컬럼을 datetime형태로 변경
             source[self.visit_detail_start_datetime] = pd.to_datetime(source[self.visit_detail_start_datetime])
@@ -736,12 +736,11 @@ class VisitDetailTransformer(DataTransformer):
             max_timestamp = pd.Timestamp.max
 
             # NaT 값을 최대 Timestamp 값으로 대체
-            # 원본에 256건의 NaT값이 있지만 감안하고 하자.. 12건 늘어남
             source["visit_end_datetime"] = source["visit_end_datetime"].fillna(max_timestamp)
 
             source = source[(source[self.visit_detail_start_datetime] >= source["visit_start_datetime"]) & (source[self.visit_detail_start_datetime] <= source["visit_end_datetime"])]
             # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
-            logging.debug(f"CDM 테이블과 결합 후 원천 데이터 row수: {len(source)}")
+            logging.debug(f"visit_detail 날짜조건 적용 후 데이터 row수: {len(source)}")
 
             return source
         
@@ -955,7 +954,7 @@ class ConditionOccurrenceTransformer(DataTransformer):
             source[self.condition_start_datetime] = pd.to_datetime(source[self.condition_start_datetime], format="%Y%m%d")
             source[self.orddd] = pd.to_datetime(source[self.orddd])
             # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.orddd].dt.strftime("%Y%m%d") + ';' + source[self.visit_no] + ';' + source[self.hospital]
             source = source[source[self.condition_start_datetime] <= self.data_range]
             source = source[source[self.condition_start_datetime].notna()]
             logging.debug(f"조건 적용후 원천 데이터 row수: {len(source)}")
@@ -1024,7 +1023,7 @@ class ConditionOccurrenceTransformer(DataTransformer):
             cdm = pd.DataFrame({
                 "condition_occurrence_id": source.index + 1,
                 "person_id": source["person_id"],
-                "condition_concept_id": self.no_matching_concept[0],
+                "condition_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], self.no_matching_concept[0]),
                 "condition_start_date": source[self.condition_start_datetime].dt.date,
                 "condition_start_datetime": source[self.condition_start_datetime],
                 "condition_end_date": source["visit_end_datetime"].dt.date,
@@ -1039,7 +1038,7 @@ class ConditionOccurrenceTransformer(DataTransformer):
                 "visit_detail_id": source["visit_detail_id"],
                 "condition_source_value": source[self.condition_source_value],
                 "진단명": source[self.engname],
-                "condition_source_concept_id": self.no_matching_concept[0],
+                "condition_source_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], self.no_matching_concept[0]),
                 "condition_status_source_value": self.condition_status_source_value,
                 "visit_source_key": source["visit_source_key"],
                 "환자구분": source["visit_source_value"],
@@ -1209,7 +1208,7 @@ class DrugexposureTransformer(DataTransformer):
             source[self.drug_exposure_start_datetime] = pd.to_datetime(source[self.drug_exposure_start_datetime])
             source[self.orddd] = pd.to_datetime(source[self.orddd])
             # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.orddd].dt.strftime("%Y%m%d") + ';' + source[self.visit_no] + ';' + source[self.hospital]
             source = source[(source[self.drug_exposure_start_datetime] <= self.data_range)]
             
 
@@ -1307,7 +1306,8 @@ class DrugexposureTransformer(DataTransformer):
             "visit_detail_id": source["visit_detail_id"],
             "drug_source_value": source[self.drug_source_value],
             "drug_source_value_name": source[self.drug_source_value_name],
-            "drug_source_concept_id": source[self.edicode],
+            "drug_source_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
+            "EDI코드": source[self.edicode],
             "route_source_value": source[self.route_source_value],
             "dose_unit_source_value": source[self.dose_unit_source_value],
             "vocabulary_id": "EDI",
@@ -1531,7 +1531,7 @@ class MeasurementDiagTransformer(DataTransformer):
             source["접수일시"] = source["SPCACPTDT"]
 
             source[self.orddd] = pd.to_datetime(source[self.orddd])
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.orddd].dt.strftime("%Y%m%d") + ';' + source[self.visit_no] + ';' + source[self.hospital]
             source[self.measurement_date] = pd.to_datetime(source[self.measurement_date])
 
             # value_as_number float형태로 저장되게 값 변경
@@ -1727,7 +1727,8 @@ class MeasurementDiagTransformer(DataTransformer):
                 "visit_detail_id": source["visit_detail_id"],
                 "measurement_source_value": source[self.measurement_source_value],
                 "measurement_source_value_name": source["ORDNM"],
-                "measurement_source_concept_id": np.select([source[self.edicode].notna()], [source[self.edicode]], default=self.no_matching_concept[0]),
+                "measurement_source_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
+                "EDI코드": source[self.edicode],
                 "unit_source_value": source[self.unit_source_value],
                 "value_source_value": source[self.value_source_value].str[:50],
                 "vocabulary_id": "EDI",
@@ -1863,7 +1864,7 @@ class MeasurementpthTransformer(DataTransformer):
             source["보고일시"] = source[self.measurement_date]
 
             source[self.orddd] = pd.to_datetime(source[self.orddd])
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.orddd].dt.strftime("%Y%m%d") + ';' + source[self.visit_no] + ';' + source[self.hospital]
             source[self.measurement_date] = pd.to_datetime(source[self.measurement_date])
 
             # local_edi 전처리
@@ -2051,7 +2052,8 @@ class MeasurementpthTransformer(DataTransformer):
                 "visit_detail_id": source["visit_detail_id"],
                 "measurement_source_value": source[self.measurement_source_value],
                 "measurement_source_value_name": source["ORDNM"],
-                "measurement_source_concept_id": np.select([source[self.edicode].notna()], [source[self.edicode]], default=self.no_matching_concept[0]),
+                "measurement_source_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
+                "EDI코드": source[self.edicode],
                 "unit_source_value": self.unit_source_value,
                 "value_source_value": source[self.value_source_value].str[:50],
                 "vocabulary_id": "EDI",
@@ -2130,7 +2132,7 @@ class MeasurementVSTransformer(DataTransformer):
             concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f'원천 데이터 row수: {len(source)}')
 
-            source["visit_source_key"] = source[self.person_source_value] + source[self.orddd]
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.orddd] + ';' + ';'
 
             # 원천에서 조건걸기
             source[self.measurement_date] = pd.to_datetime(source[self.measurement_date])
@@ -2235,6 +2237,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "measurement_source_value": source[self.measurement_source_value],
                 "measurement_source_value_name": source[self.measurement_source_value],
                 "measurement_source_concept_id": self.no_matching_concept[0],
+                "EDI코드": None,
                 "unit_source_value": None,
                 "value_source_value": source[self.value_source_value].str[:50],
                 "vocabulary_id": None,
@@ -2323,7 +2326,7 @@ class MeasurementNITransformer(DataTransformer):
             # 원천에서 조건걸기
             source = source[[self.person_source_value, self.admtime, self.provider, self.height, self.weight, self.sbp, self.dbp, self.pulse, self.breth, self.bdtp, self.spo2, self.hospital]]
             # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.admtime] + source[self.hospital]
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.admtime] + ';' +  ';' + source[self.hospital]
 
             source[self.admtime] = pd.to_datetime(source[self.admtime], format="%Y%m%d")
             source = source[(source[self.admtime] <= self.data_range)]
@@ -2352,8 +2355,9 @@ class MeasurementNITransformer(DataTransformer):
 
             # visit_occurrence table과 병합
             visit_data = visit_data[visit_data["visit_source_value"] == 'I']
+            visit_data["instcd"] = visit_data["visit_source_key"].str.split(';')[-1]
             visit_data["visit_start_date"] = pd.to_datetime(visit_data["visit_start_date"])
-            source = pd.merge(source, visit_data, left_on=["person_id", self.admtime], right_on=["person_id", "visit_start_date"], how="left", suffixes=('', '_y'))
+            source = pd.merge(source, visit_data, left_on=["person_id", self.admtime, self.hospital], right_on=["person_id", "visit_start_date", ], how="left", suffixes=('', '_y'))
             logging.debug(f'visit_occurrence 테이블과 결합 후 원천 데이터 row수: {len(source)}')
 
             visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
@@ -2491,6 +2495,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_source_value": measurement_concept["weight"][1],
                 "measurement_source_value_name": measurement_concept["weight"][1],
                 "measurement_source_concept_id": measurement_concept["weight"][0],
+                "EDI코드": None,
                 "unit_source_value": measurement_concept["weight"][3],
                 "value_source_value": source_weight[self.weight],
                 "vocabulary_id": "SNOMED",
@@ -2541,6 +2546,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_source_value": measurement_concept["height"][1],
                 "measurement_source_value_name": measurement_concept["height"][1],
                 "measurement_source_concept_id": measurement_concept["height"][0],
+                "EDI코드": None,
                 "unit_source_value": measurement_concept["height"][3],
                 "value_source_value": source_height[self.height],
                 "vocabulary_id": "SNOMED",
@@ -2591,6 +2597,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_source_value": measurement_concept["bmi"][1],
                 "measurement_source_value_name": measurement_concept["bmi"][1],
                 "measurement_source_concept_id": measurement_concept["bmi"][0],
+                "EDI코드": None,
                 "unit_source_value": measurement_concept["bmi"][3],
                 "value_source_value": source_bmi["bmi"],
                 "vocabulary_id": "SNOMED",
@@ -2640,6 +2647,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_source_value": measurement_concept["sbp"][1],
                 "measurement_source_value_name": measurement_concept["sbp"][1],
                 "measurement_source_concept_id": measurement_concept["sbp"][0],
+                "EDI코드": None,
                 "unit_source_value": measurement_concept["sbp"][3],
                 "value_source_value": source_sbp[self.sbp],
                 "vocabulary_id": "SNOMED",
@@ -2689,6 +2697,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_source_value": measurement_concept["dbp"][1],
                 "measurement_source_value_name": measurement_concept["dbp"][1],
                 "measurement_source_concept_id": measurement_concept["dbp"][0],
+                "EDI코드": None,
                 "unit_source_value": measurement_concept["dbp"][3],
                 "value_source_value": source_dbp[self.dbp],
                 "vocabulary_id": "SNOMED",
@@ -2736,6 +2745,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_source_value": measurement_concept["pulse"][1],
                 "measurement_source_value_name": measurement_concept["pulse"][1],
                 "measurement_source_concept_id": measurement_concept["pulse"][0],
+                "EDI코드": None,
                 "unit_source_value": measurement_concept["pulse"][3],
                 "value_source_value": source_pulse[self.pulse],
                 "vocabulary_id": "SNOMED",
@@ -2785,6 +2795,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_source_value": measurement_concept["breth"][1],
                 "measurement_source_value_name": measurement_concept["breth"][1],
                 "measurement_source_concept_id": measurement_concept["breth"][0],
+                "EDI코드": None,
                 "unit_source_value": measurement_concept["breth"][3],
                 "value_source_value": source_breth[self.breth],
                 "vocabulary_id": "SNOMED",
@@ -2834,6 +2845,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_source_value": measurement_concept["bdtp"][1],
                 "measurement_source_value_name": measurement_concept["bdtp"][1],
                 "measurement_source_concept_id": measurement_concept["bdtp"][0],
+                "EDI코드": None,
                 "unit_source_value": measurement_concept["bdtp"][3],
                 "value_source_value": source_bdtp[self.bdtp],
                 "vocabulary_id": "SNOMED",
@@ -2883,6 +2895,7 @@ class MeasurementNITransformer(DataTransformer):
                 "measurement_source_value": measurement_concept["spo2"][1],
                 "measurement_source_value_name": measurement_concept["spo2"][1],
                 "measurement_source_concept_id": measurement_concept["spo2"][0],
+                "EDI코드": None,
                 "unit_source_value": measurement_concept["spo2"][3],
                 "value_source_value": source_spo2[self.spo2],
                 "vocabulary_id": "SNOMED",
@@ -3166,7 +3179,7 @@ class ProcedurePACSTransformer(DataTransformer):
             source["진료일시"] = source[self.orddd]
 
             source[self.orddd] = pd.to_datetime(source[self.orddd])
-            source["visit_source_key"] = source[self.person_source_value] + source[self.meddept] + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + source[self.hospital]
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.orddd].dt.strftime("%Y%m%d") + source[self.visit_no] + ';' + source[self.hospital]
             source["procedure_datetime"] = source["CONFDATE"] + source["CONFTIME"]
             source["procedure_datetime"] = pd.to_datetime(source["procedure_datetime"])
             source[self.readtext] = source[self.readtext].astype(str)
@@ -3260,7 +3273,8 @@ class ProcedurePACSTransformer(DataTransformer):
                 "visit_detail_id": source["visit_detail_id"],
                 "procedure_source_value": source[self.procedure_source_value],
                 "procedure_source_value_name": source["ORDNM"],
-                "procedure_source_concept_id": source[self.edicode],
+                "procedure_source_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
+                "EDI코드": source[self.edicode],
                 "modifier_source_value": None ,
                 "vocabulary_id": "EDI",
                 "visit_source_key": source["visit_source_key"],
