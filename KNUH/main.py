@@ -7,53 +7,53 @@ if __name__ == "__main__":
 
     start_time = datetime.now()
     try : 
-        # care_site = CareSiteTransformer(config)    
-        # care_site.transform()
+        care_site = CareSiteTransformer(config)    
+        care_site.transform()
 
-        # provider = ProviderTransformer(config)    
-        # provider.transform()
+        provider = ProviderTransformer(config)    
+        provider.transform()
 
-        # person = PersonTransformer(config)    
-        # person.transform()
+        person = PersonTransformer(config)    
+        person.transform()
 
-        # visit_occurrence = VisitOccurrenceTransformer(config)    
-        # visit_occurrence.transform()
+        visit_occurrence = VisitOccurrenceTransformer(config)    
+        visit_occurrence.transform()
 
-        # visit_detail = VisitDetailTransformer(config)    
-        # visit_detail.transform()
+        visit_detail = VisitDetailTransformer(config)    
+        visit_detail.transform()
 
-        # local_kcd = LocalKCDTransformer(config)    
-        # local_kcd.transform()
+        local_kcd = LocalKCDTransformer(config)    
+        local_kcd.transform()
 
-        # condition_occurrence = ConditionOccurrenceTransformer(config)    
-        # condition_occurrence.transform()
+        condition_occurrence = ConditionOccurrenceTransformer(config)    
+        condition_occurrence.transform()
 
-        # drug_edi = DrugEDITransformer(config)
-        # drug_edi.transform()
+        drug_edi = DrugEDITransformer(config)
+        drug_edi.transform()
 
-        # drug_exposure = DrugexposureTransformer(config)    
-        # drug_exposure.transform()
+        drug_exposure = DrugexposureTransformer(config)    
+        drug_exposure.transform()
 
-        # measurement_edi = MeasurementEDITransformer(config)    
-        # measurement_edi.transform()
+        measurement_edi = MeasurementEDITransformer(config)    
+        measurement_edi.transform()
 
-        # procedure_edi = ProcedureEDITransformer(config)
-        # procedure_edi.transform()
+        procedure_edi = ProcedureEDITransformer(config)
+        procedure_edi.transform()
 
-        # measurement_diag = MeasurementDiagTransformer(config)
-        # measurement_diag.transform()
+        measurement_diag = MeasurementDiagTransformer(config)
+        measurement_diag.transform()
 
-        # measurement_pth = MeasurementpthTransformer(config)
-        # measurement_pth.transform()
+        measurement_pth = MeasurementpthTransformer(config)
+        measurement_pth.transform()
 
-        # measurement_vs = MeasurementVSTransformer(config)
-        # measurement_vs.transform()
+        measurement_vs = MeasurementVSTransformer(config)
+        measurement_vs.transform()
 
-        # measurement_ni = MeasurementNITransformer(config)
-        # measurement_ni.transform()
+        measurement_ni = MeasurementNITransformer(config)
+        measurement_ni.transform()
 
-        # merge_measurement = MergeMeasurementTransformer(config)
-        # merge_measurement.transform()
+        merge_measurement = MergeMeasurementTransformer(config)
+        merge_measurement.transform()
 
         procedure_pacs = ProcedurePACSTransformer(config)
         procedure_pacs.transform()
