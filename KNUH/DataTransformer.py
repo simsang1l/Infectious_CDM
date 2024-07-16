@@ -1869,7 +1869,7 @@ class MeasurementpthTransformer(DataTransformer):
             source[self.measurement_date] = pd.to_datetime(source[self.measurement_date])
 
             # local_edi 전처리
-            local_edi = local_edi[[self.ordcode, self.fromdate, self.todate, self.edicode, "concept_id", self.hospital, "ORDNM"]]
+            local_edi = local_edi[[self.ordcode, self.fromdate, self.todate, self.edicode, "concept_id", self.hospital, "ORDNM", "PRCPNM"]]
             local_edi[self.fromdate] = pd.to_datetime(local_edi[self.fromdate] , format="%Y%m%d", errors="coerce")
             # local_edi[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
             local_edi[self.todate] = pd.to_datetime(local_edi[self.todate] , format="%Y%m%d", errors="coerce")
@@ -2052,7 +2052,7 @@ class MeasurementpthTransformer(DataTransformer):
                 "visit_occurrence_id": source["visit_occurrence_id"],
                 "visit_detail_id": source["visit_detail_id"],
                 "measurement_source_value": source[self.measurement_source_value],
-                "measurement_source_value_name": source["ORDNM"],
+                "measurement_source_value_name": source["PRCPNM"],
                 "measurement_source_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
                 "EDI코드": source[self.edicode],
                 "unit_source_value": self.unit_source_value,
@@ -2060,7 +2060,7 @@ class MeasurementpthTransformer(DataTransformer):
                 "vocabulary_id": "EDI",
                 "visit_source_key": source["visit_source_key"],
                 "처방코드": source[self.measurement_source_value],
-                "처방명": source["ORDNM"],
+                "처방명": source["PRCPNM"],
                 "환자구분": source["visit_source_value"],
                 "진료과": source[self.meddept],
                 "진료과명": source["care_site_name"],
@@ -3049,6 +3049,7 @@ class ProcedureEDITransformer(DataTransformer):
             concept_data = self.read_csv(self.concept_data, path_type = self.source_flag, dtype = self.source_dtype, encoding=self.cdm_encoding)
             logging.debug(f'원천 데이터 row수: order: {len(order_data)}, edi: {len(edi_data)}')
             
+            edi_data = edi_data[[self.sugacode, self.hospital, self.edicode, self.fromdd, self.todd, "ORDNM"]]
             # 처방코드 마스터와 수가코드 매핑
             source = pd.merge(order_data, edi_data, left_on=[self.ordercode, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
             logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
@@ -3273,14 +3274,14 @@ class ProcedurePACSTransformer(DataTransformer):
                 "visit_occurrence_id": source["visit_occurrence_id"],
                 "visit_detail_id": source["visit_detail_id"],
                 "procedure_source_value": source[self.procedure_source_value],
-                "procedure_source_value_name": source["ORDNM"],
+                "procedure_source_value_name": source["PRCPNM"],
                 "procedure_source_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
                 "EDI코드": source[self.edicode],
                 "modifier_source_value": None ,
                 "vocabulary_id": "EDI",
                 "visit_source_key": source["visit_source_key"],
                 "처방코드": source[self.procedure_source_value],
-                "처방명": source["ORDNM"],
+                "처방명": source["PRCPNM"],
                 "환자구분": source["visit_source_value"],
                 "진료과": source[self.meddept],
                 "진료과명": source["care_site_name"],
