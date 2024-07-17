@@ -1203,7 +1203,7 @@ class DrugexposureTransformer(DataTransformer):
             # 원천에서 조건걸기
             source = source[[self.person_source_value, self.drug_source_value, self.drug_exposure_start_datetime,
                              self.meddept, self.days_supply, self.qty, self.cnt, self.provider,
-                             self.dose_unit_source_value, self.hospital, self.route_source_value, self.orddd, self.visit_no]]
+                             self.dose_unit_source_value, self.hospital, self.route_source_value, self.orddd, self.visit_no, "PRCPNO"]]
             source["진료일시"] = source[self.orddd]
             source[self.drug_exposure_start_datetime] = pd.to_datetime(source[self.drug_exposure_start_datetime])
             source[self.orddd] = pd.to_datetime(source[self.orddd])
@@ -3050,15 +3050,18 @@ class ProcedureEDITransformer(DataTransformer):
             logging.debug(f'원천 데이터 row수: order: {len(order_data)}, edi: {len(edi_data)}')
             
             edi_data = edi_data[[self.sugacode, self.hospital, self.edicode, self.fromdd, self.todd, "ORDNM"]]
+            order_data = order_data[[self.ordercode, self.hospital, self.fromdd, self.todd, "PRCPNM", "PRCPHNGNM"]]
             # 처방코드 마스터와 수가코드 매핑
             source = pd.merge(order_data, edi_data, left_on=[self.ordercode, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
             logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
+            source = source[(source["FROMDD_x"] <= source["FROMDD_y"]) &  (source["FROMDD_y"] <= source["TODD_x"])]
+            logging.debug(f'조건 적용 후 데이터 row수: {len(source)}')
 
             # null값에 fromdate, todate 설정
-            # source["FROMDD_x"].fillna("19000101")
-            # source["TODD_x"].fillna("20991231")
-            source[self.fromdate] = source["FROMDD_x"].where(source["FROMDD_y"].notna(), source["FROMDD_y"])
-            source[self.todate] = source["TODD_y"].where(source["TODD_y"].notna(), source["TODD_y"])
+            source["FROMDD_y"] = source["FROMDD_y"].fillna(source["FROMDD_x"])
+            source["TODD_y"] = source["TODD_y"].fillna(source["TODD_x"])
+            source[self.fromdate] = source["FROMDD_y"].where(source["FROMDD_y"].notna(), source["FROMDD_x"])
+            source[self.todate] = source["TODD_y"].where(source["TODD_y"].notna(), source["TODD_x"])
 
             concept_data = concept_data.sort_values(by = ["vocabulary_id"], ascending=[False])
             concept_data['Sequence'] = concept_data.groupby(["concept_code"]).cumcount() + 1
@@ -3073,6 +3076,11 @@ class ProcedureEDITransformer(DataTransformer):
             #                      "standard_concept", "concept_code", "valid_start_date", "valid_end_date", "invalid_reason"
             #                      ]]
         
+            # 중복제거
+            source = source.drop_duplicates()
+            logging.debug(f'중복제거 후 데이터 row수: {len(source)}')
+
+
             logging.debug(f'local_edi row수: {len(source)}')
             logging.debug(f"요약:\n{source.describe(include = 'all').T.to_string()}")
             logging.debug(f"컬럼별 null 개수:\n{source.isnull().sum().to_string()}")
