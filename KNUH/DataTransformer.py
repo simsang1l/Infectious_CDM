@@ -49,6 +49,7 @@ class DataTransformer:
         self.no_matching_concept = self.config["no_matching_concept"]
         self.concept_kcd = self.config["concept_kcd"]
         self.local_kcd_data = self.config["local_kcd_data"]
+        self.hospital_code = self.config["hospital_code"]
 
         # 상병조건이 있다면 조건에 맞는 폴더 생성
         os.makedirs(os.path.join(self.cdm_path, self.diag_condition ), exist_ok = True)
@@ -1289,8 +1290,8 @@ class DrugexposureTransformer(DataTransformer):
             "drug_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
             "drug_exposure_start_date": source[self.drug_exposure_start_datetime].dt.date,
             "drug_exposure_start_datetime": source[self.drug_exposure_start_datetime],
-            "drug_exposure_end_date": source[self.drug_exposure_start_datetime].dt.date + pd.to_timedelta(source[self.days_supply].astype(int)), # + 1, unit = "D"),
-            "drug_exposure_end_datetime": source[self.drug_exposure_start_datetime] + pd.to_timedelta(source[self.days_supply].astype(int)), # + 1, unit = "D"),
+            "drug_exposure_end_date": source[self.drug_exposure_start_datetime].dt.date + pd.to_timedelta(source[self.days_supply].astype(int) - 1, unit="days"),
+            "drug_exposure_end_datetime": source[self.drug_exposure_start_datetime] + pd.to_timedelta(source[self.days_supply].astype(int) - 1, unit="days"),
             "verbatim_end_date": None,
             "drug_type_concept_id": np.select([source["drug_type_concept_id"].notna()], [source["drug_type_concept_id"]], default = self.no_matching_concept[0]),
             "drug_type_concept_id_name": np.select([source["concept_name"].notna()], [source["concept_name"]], default = self.no_matching_concept[1]),
@@ -1390,11 +1391,15 @@ class MeasurementEDITransformer(DataTransformer):
             source = pd.merge(order_data, edi_data, left_on=[self.ordercode, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
             logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
 
-            # # null값에 fromdate, todate 설정
-            # source[self.order_fromdate].fillna("19000101")
-            # source[self.order_todate].fillna("20991231")
-            # source[self.fromdate].fillna("19000101")
-            # source[self.todate].fillna("20991231")
+            source = source[(source[self.fromdd] <= source[self.order_fromdate]) &  (source[self.fromdd] <= source[self.order_todate])]
+            logging.debug(f'조건 적용 후 데이터 row수: {len(source)}')
+
+            # null값에 fromdate, todate 설정
+            source[self.fromdd] = source[self.fromdd].fillna(source[self.order_fromdate])
+            source[self.todd] = source[self.todd].fillna(source[self.order_todate])
+
+            source[self.fromdate] = source[self.fromdd].where(source[self.fromdd].notna(), source[self.order_fromdate])
+            source[self.todate] = source[self.todd].where(source[self.todd].notna(), source[self.order_fromdate])
 
             concept_data = concept_data.sort_values(by = ["vocabulary_id"], ascending=[False])
             concept_data['Sequence'] = concept_data.groupby(["concept_code"]).cumcount() + 1
@@ -1495,7 +1500,7 @@ class MeasurementDiagTransformer(DataTransformer):
             source1[self.orddate] = pd.to_datetime(source1[self.orddate])
             source1["ORDDD"] = pd.to_datetime(source1["ORDDD"])
             source1 = source1[(source1[self.orddate] <= self.data_range)]
-            source1 = source1[(source1["PRCPHISTCD"] == "O") & (source1[self.hospital] == "031") ]
+            source1 = source1[(source1["PRCPHISTCD"] == "O") & (source1[self.hospital] == self.hospital_code) ]
             
             source2 = source2[[self.hospital, self.orddate, "PRCPNO", "PRCPHISTNO", "EXECPRCPUNIQNO", "ORDDD", self.unit_source_value, "EXECDD", "EXECTM"]]
             source2[self.orddate] = pd.to_datetime(source2[self.orddate])
@@ -1827,7 +1832,7 @@ class MeasurementpthTransformer(DataTransformer):
 
             # 원천에서 조건걸기
             source1 = source1[[self.hospital, self.person_source_value, "PTNO", "RSLTRGSTDD", "RSLTRGSTNO", "RSLTRGSTHISTNO", "DELFLAGCD", "HISTNO"]]
-            source1 = source1[(source1["RSLTRGSTHISTNO"] == "1") & (source1["DELFLAGCD"] == "0") & (source1["HISTNO"] == 1) ]
+            source1 = source1[(source1["RSLTRGSTHISTNO"] == "1") & (source1["DELFLAGCD"] == "0") & (source1["HISTNO"] == "1") ]
             
             source2 = source2[[self.hospital, self.person_source_value, "PTNO", "RSLTRGSTDD", "RSLTRGSTNO", "RSLTRGSTHISTNO", self.value_source_value]]
 

@@ -1,4 +1,4 @@
-source_path: "F:/01.감염병데이터베이스/data/2024_infectious_DW"
+source_path: "F:\\01.감염병데이터베이스\\결핵\\emr"
 CDM_path: "F:/01.감염병데이터베이스/data/2024_infectious_CDM_folder"
 source_encoding: "utf-8"
 cdm_encoding: "utf-8-sig"
@@ -18,7 +18,7 @@ concept_unit: "concept_unit"
 concept_etc: "concept_etc"
 concept_kcd: "concept_kcd7"
 unit_concept_synonym: "unit_concept_synonym"
-diag_condition: "A9380"
+diag_condition: "A753"
 # ['A9380', 'A753', 'A31']
 no_matching_concept: [0, "No matching concept"]
 
