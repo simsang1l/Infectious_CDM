@@ -2034,7 +2034,7 @@ class MeasurementpthTransformer(DataTransformer):
             # ]
 
             cdm = pd.DataFrame({
-                "measurement_id": source.index + 1,
+                "measurement_id": 1,
                 "person_id": source["person_id"],
                 "measurement_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
                 "measurement_date": np.select(measurement_date_condition, measurement_date_value, default=source[self.orddate].dt.date),
@@ -2081,6 +2081,10 @@ class MeasurementpthTransformer(DataTransformer):
                 # "나이": None,
                 "결과내역": source[self.value_source_value]
                 })
+                
+            cdm = cdm.drop_duplicates()
+
+            cdm["measurement_id"] = source.index + 1
 
             logging.debug(f'CDM 데이터 row수: {len(cdm)}')
             logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
