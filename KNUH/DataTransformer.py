@@ -67,8 +67,9 @@ class DataTransformer:
         path_type에 따라 'source' 또는 'CDM' 경로에서 파일을 읽습니다.
         """
         if path_type == "source":
-            full_path = os.path.join(self.config["source_path"], file_name + ".csv")
+            full_path = os.path.join(self.config["source_path"], hospital_code, file_name + ".csv")
             default_encoding = self.source_encoding
+            
         elif path_type == "CDM":
             if self.diag_condition:
                 full_path = os.path.join(self.config["CDM_path"], self.diag_condition, file_name + ".csv")
@@ -82,15 +83,16 @@ class DataTransformer:
 
         return pd.read_csv(full_path, dtype = dtype, encoding = encoding)
 
-    def write_csv(self, df, file_path, filename, encoding = 'utf-8'):
+    def write_csv(self, df, file_path, filename, encoding = 'utf-8', hospital_code = None):
         """
         DataFrame을 CSV 파일로 저장합니다.
         """
         encoding = self.cdm_encoding
+        hospital_code = self.hospital_code
         if self.diag_condition:
-            df.to_csv(os.path.join(file_path, self.diag_condition, filename + ".csv"), encoding = encoding, index = False)
+            df.to_csv(os.path.join(file_path, hospital_code, self.diag_condition, filename + ".csv"), encoding = encoding, index = False)
         else:
-            df.to_csv(os.path.join(file_path, filename + ".csv"), encoding = encoding, index = False)
+            df.to_csv(os.path.join(file_path, hospital_code, filename + ".csv"), encoding = encoding, index = False)
 
     def transform(self):
         """
@@ -1394,13 +1396,6 @@ class MeasurementEDITransformer(DataTransformer):
             source = source[(source[self.fromdd] <= source[self.order_fromdate]) &  (source[self.fromdd] <= source[self.order_todate])]
             logging.debug(f'조건 적용 후 데이터 row수: {len(source)}')
 
-            # null값에 fromdate, todate 설정
-            source[self.fromdd] = source[self.fromdd].fillna(source[self.order_fromdate])
-            source[self.todd] = source[self.todd].fillna(source[self.order_todate])
-
-            source[self.fromdate] = source[self.fromdd].where(source[self.fromdd].notna(), source[self.order_fromdate])
-            source[self.todate] = source[self.todd].where(source[self.todd].notna(), source[self.order_fromdate])
-
             concept_data = concept_data.sort_values(by = ["vocabulary_id"], ascending=[False])
             concept_data['Sequence'] = concept_data.groupby(["concept_code"]).cumcount() + 1
             concept_data = concept_data[concept_data["Sequence"] == 1]
@@ -1415,11 +1410,6 @@ class MeasurementEDITransformer(DataTransformer):
 
             # drug의 경우 KCD, EDI 순으로 매핑
             logging.debug(f'중복되는 concept_id 제거 후 데이터 row수: {len(source)}')
-
-            # local_edi = source[[self.ordercode, self.fromdate, self.todate, self.edicode, self.hospital,
-            #                      "concept_id", "concept_name", "domain_id", "vocabulary_id", "concept_class_id", 
-            #                      "standard_concept", "concept_code", "valid_start_date", "valid_end_date", "invalid_reason"
-            #                      ]]
         
             logging.debug(f'local_edi row수: {len(source)}')
             logging.debug(f"요약:\n{source.describe(include = 'all').T.to_string()}")
@@ -3059,14 +3049,12 @@ class ProcedureEDITransformer(DataTransformer):
             # 처방코드 마스터와 수가코드 매핑
             source = pd.merge(order_data, edi_data, left_on=[self.ordercode, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
             logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
-            source = source[(source["FROMDD_x"] <= source["FROMDD_y"]) &  (source["FROMDD_y"] <= source["TODD_x"])]
+            source = source[(source["FROMDD_y"] <= source["FROMDD_x"]) & (source["FROMDD_y"] <= source["TODD_x"])]
             logging.debug(f'조건 적용 후 데이터 row수: {len(source)}')
 
-            # null값에 fromdate, todate 설정
-            source["FROMDD_y"] = source["FROMDD_y"].fillna(source["FROMDD_x"])
-            source["TODD_y"] = source["TODD_y"].fillna(source["TODD_x"])
-            source[self.fromdate] = source["FROMDD_y"].where(source["FROMDD_y"].notna(), source["FROMDD_x"])
-            source[self.todate] = source["TODD_y"].where(source["TODD_y"].notna(), source["TODD_x"])
+            # fromdate, todate 설정
+            source[self.fromdate] = source["FROMDD_x"].where(source["FROMDD_x"].notna(), source["FROMDD_y"])
+            source[self.todate] = source["TODD_x"].where(source["TODD_x"].notna(), source["TODD_y"])
 
             concept_data = concept_data.sort_values(by = ["vocabulary_id"], ascending=[False])
             concept_data['Sequence'] = concept_data.groupby(["concept_code"]).cumcount() + 1

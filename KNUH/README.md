@@ -54,3 +54,19 @@ config.yaml구조
 **<u>columns</u>**
 
 테이블별 CDM컬럼에 매칭되는 raw data의 컬럼명 입력
+
+
+## 실행 결과 구조
+```
+└── cdm_path
+    ├── 병원구분코드(본원)
+    |       └── 상병코드
+    |                |── care_site.csv
+    |                |── ...
+    |                └── visit_occurrence.csv
+    └── 병원구분코드(칠곡)
+            └── 상병코드
+                    |── care_site.csv
+                    |── ...
+                    └── visit_occurrence.csv
+```
