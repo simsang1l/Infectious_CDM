@@ -1,0 +1,305 @@
+source_path: "F:\\01.감염병데이터베이스\\data\\dsmc\\emr"
+CDM_path: "F:\\01.감염병데이터베이스\\data\\dsmc\\cdm"
+source_encoding: "utf-8"
+cdm_encoding: "utf-8-sig"
+source_dtype: "str"
+target_zip: "426"
+data_range: "2023-08-31"
+care_site_data: "care_site"
+person_data: "person"
+provider_data: "provider"
+visit_data: "visit_occurrence"
+visit_detail_data: "visit_detail"
+local_kcd_data: "local_kcd"
+local_edi_data: "local_edi"
+person_source_value: "환자번호"
+location_data: "location"
+concept_unit: "concept_unit"
+visit_source_key: "수진번호"
+ordcode: "처방코드"
+edicode: "EDI 코드"
+fromdate: "적용시작일"
+todate: "적용종료일"
+hospital: "병원구분"
+concept_etc: "concept_etc"
+concept_kcd: "concept_kcd7"
+unit_concept_synonym: "unit_concept_synonym"
+diag_condition: "A753"
+# ['A9380', 'A753', 'A31']
+no_matching_concept: [0, "No matching concept"]
+
+# DQ
+excel_path: "QC/품질진단지표.xlsx"
+sheet_table_count: "원본비교결과"
+sheet_field_summary: "컬럼별데이터분포진단"
+sheet_dq: "점검사항"
+sheet_meta: "메타데이터진단"
+
+care_site:
+  data:
+    source_data: "care_site"
+    output_filename: "care_site"
+  columns:
+    care_site_name: "부서명"
+    place_of_service_concept_id: 0
+    care_site_source_value: "부서코드"
+    place_of_service_source_value: "병원구분"
+    location_source_value: "LOCATION_SOURCE_VALUE"
+
+provider:
+  data:
+    source_data: "provider"
+    output_filename: "provider"
+  columns:
+    provider_name: null
+    year_of_birth: "의료제공자 출생년도"
+    provider_source_value: "의료제공자 식별ID"
+    specialty_source_value: "의료제공자 전문분야"
+    specialty_source_value_name: "의료제공자 전문분야"
+    gender_source_value: "의료제공자 성별"
+    care_site_source_value: "진료부서" # 수정 필요
+
+person:
+  data:
+    source_data: "person"
+    source_condition: "condition_occurrence"
+    output_filename: "person"
+    death_data: "death"
+  columns:
+    gender_source_value: "성별"
+    race_source_value: "외국인구분"
+    death_datetime: "사망일시"
+    birth_date: "생년월일"
+    person_name: null
+    location_source_value: "우편번호"
+    abotyp: ABOTYP
+    rhtyp: RHTYP
+    # 상병코드가 있을 경우 상병코드 컬럼 내용
+    diagcode: "DIAGCODE"
+    ruleoutyn: "RULEOUTYN"
+    diagfg: "DIAGFG"
+
+visit_occurrence:
+  data:
+    source_data: "visit_occurrence"
+    output_filename: "visit_occurrence"
+  columns:
+    admitted_from_source_value: "입원경로"
+    discharge_to_source_value: "퇴원형태"
+    visit_source_value: "방문유형"
+    visit_start_datetime: "내원시작일시"
+    visit_end_datetime: "내원종료일시"
+    medtime: "MEDTIME"
+    admtime: "ADMTIME"
+    dschtime: "DSCHTIME"
+    meddept: "MEDDEPT"
+    meddr: "MEDDR"
+    chadr: "CHADR"
+
+visit_detail:
+  data:
+   source_data: "visit_detail"
+   output_filename: "visit_detail"
+  columns:
+    visit_detail_start_datetime: "ICU입실일자"
+    visit_detail_end_datetime: "ICU퇴실일자"
+    visit_detail_source_value: "병동코드"
+    admitted_from_source_value: null
+    discharge_to_source_value: null
+    meddept: "MEDDEPT"
+    provider: "CHADR"
+    wardno: "WARDNO"
+
+local_kcd:
+  data: 
+    source: ods_sidiagct
+    output_filename: local_kcd
+  columns:
+    diagcode: DIAGCODE
+    fromdate: FROMDATE
+    todate: TODATE
+    engname: ENGNAME
+    korname: KORNAME
+    stdiagcd: STDIAGCD
+    kcdversion: KCDVERSION
+    # columns in concept table
+    concept_id: concept_id
+    concept_name: concept_name
+    domain_id: domain_id
+    vocabulary_id: vocabulary_id
+    concept_class_id: concept_class_id
+    standard_concept: standard_concept
+    concept_code: concept_code
+    valid_start_date: valid_start_date
+    valid_end_date: valid_end_date
+    invalid_reason: invalid_reason
+
+
+condition_occurrence:
+  data:
+    source_data: "condition_occurrence"
+    output_filename: "condition_occurrence"  
+  columns:
+    meddept: "MEDDEPT"
+    provider: "CHADR"
+    condition_start_datetime: "진단일"
+    condition_type: 주상병여부
+    condition_source_value: "진단코드"
+    condition_source_value_name: "진단명"
+    condition_status_source_value: "확정상병여부"
+    patfg: "PATFG"
+    diagfg: "DIAGFG"
+    # local_kcd파일의 컬럼 정의
+    fromdate: FROMDATE
+    todate: TODATE
+
+
+local_edi:
+  data:
+    order_data: "계명대병원_처방코드마스터_20231117"
+    edi_data: "ods_aipricst"
+    concept_data: "concept_EDI_KDC"
+    atc_data: "edi_atc"
+    output_filename: "local_edi"
+  columns:
+    ordercode: "처방코드"
+    ordname: "처방명"
+    edicode: "EDI 코드"
+    fromdate: "적용시작일"
+    todate: "적용종료일"
+    standard_code: "표준코드"
+    atccode: "ATC코드"
+    atcname: "ATC 코드명"
+    edi_fromdate: "품목허가일자"
+    edi_todate: "취소일자"
+
+
+drug_exposure:
+  data:
+    source_data: "drug_exposure"
+    output_filename: "drug_exposure"
+  columns:
+    meddept: "MEDDEPT"
+    provider: "CHADR"
+    drug_exposure_start_datetime: "약처방일"
+    drug_source_value: "약처방코드"
+    days_supply: "처방일수"
+    qty: "처방량"
+    cnt: "처방횟수"
+    route_source_value: "약물투여경로코드"
+    dose_unit_source_value: "처방단위"
+    medtime: "MEDTIME"
+    dcyn: "DCYN"
+    patfg: "PATFG"
+    drug_source_value_name: "ORDNAME"
+    methodcd: "METHODCD"
+    age: "AGE"
+    ordseqno: "ORDSEQNO"
+    # local_edi파일의 컬럼 정의
+    fromdate: FROMDATE
+    todate: TODATE
+    ordcode: ORDCODE
+    insedicode: INSEDICODE
+    atccode: "ATC코드"
+    atccodename: "ATC 코드명"
+
+
+measurement:
+  data:
+    source_data: "measurement"
+    output_filename: "measurement"
+  columns:
+    measurement_date: "검사일시"
+    measurement_source_value: "검사코드"
+    value_source_value: "검사결과"
+    unit_source_value: "검사단위"
+    result_range: "검사결과 참고치"
+    meddept: "MEDDEPT"
+    provider: "ORDDR"
+    orddate: "ORDDATE"
+    exectime: "EXECDT"
+    patfg: "PATFG"
+    medtime: "MEDTIME"
+    ordseqno: "ORDSEQNO"
+    처방코드: "ORDCODE"
+    처방명: "ORDNAME"
+    결과내역: RSLTTEXT
+    acptdt: "ACPTDT"
+    readdt: "READDT"
+    reptdt: "REPTDT"
+    # local_edi파일의 컬럼 정의
+    fromdate: FROMDATE
+    todate: TODATE
+    ordcode: ORDCODE
+    insedicode: INSEDICODE
+    ordname: ORDNAME
+
+procedure:
+  data:
+    source_data: "procedure_occurrence"
+    output_filename: "procedure_occurrence"
+  columns:
+    procedure_date: "시술/처치일"
+    procedure_source_value: "시술/처치 처방코드"
+    orddate: "처방일"
+    meddept: "MEDDEPT"
+    provider: "ORDDR"
+    exectime: "EXECTIME"
+    opdate: "OPDATE"
+    procedure_source_value_name: "처방명"
+    patfg: "PATFG"
+    medtime: "MEDTIME"
+    dcyn: "DCYN"
+    ordclstyp: "ORDCLSTYP"
+    ordseqno: "ORDSEQNO"
+    age: "AGE"
+    # local_edi파일의 컬럼 정의
+    fromdate: FROMDATE
+    todate: TODATE
+    ordcode: ORDCODE
+    insedicode: INSEDICODE
+    
+
+observation_period:
+  data:
+    visit: "visit_occurrence"
+    condition: "condition_occurrence"
+    drug: "drug_exposure"
+    measurement: "measurement"
+    procedure: "procedure_occurrence"
+    output_filename: "observation_period"
+
+metadata:
+  wbc_count: ['L200201']
+  hb: ['L200203']
+  hematocrit: ['L200204']
+  platelet_count: ['L200209']
+  lymphocyte_count: ['L200316']
+  monocyte_count: ['L200317']
+  neurophil_count: ['L200318']
+  sodium: ['L3010', 'L7111']
+  potassium: ['L3011', 'L7112']
+  ast: ['L3015']
+  alt: ['L3016']
+  total_bilirubin: ['L3018']
+  total_protein: ['L3020']
+  albumin: ['L3021']
+  bun: ['L3024']
+  creatinine: ['L3025', 'L3025C']
+  egfr: ['L3025R']
+  crp: ['L3052']
+  troponin_i: ['L3301', 'L7131']
+  ck_mb: ['L3302']
+  ph: ['L100202', 'L700202', 'L100404']
+  paco2: ['LP100102']
+  pao2: ['LP100103']
+  arterial_ph: ['LP100101']
+  # vs는 concept_id로 조회
+  temperature: [4302666]
+  sbp: [4152194]
+  dbp: [4154790]
+  heartrate: [4224504]
+  respiratory_rate: [4313591]
+  bmi: [40490382]
+  height: [4177340]
+  weight: [4099154]
