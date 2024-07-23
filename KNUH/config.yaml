@@ -1,5 +1,5 @@
-source_path: "F:\\01.감염병데이터베이스\\data\\knuh\\emr"
-CDM_path: "F:\\01.감염병데이터베이스\\data\\knuh\\cdm"
+source_path: "C:\\Users\\sangil\\Downloads\\sample\\sample"
+CDM_path: "C:\\Users\\sangil\\Downloads\\sample\\cdm"
 source_encoding: "cp949"
 cdm_encoding: "utf-8-sig"
 source_dtype: "str"
@@ -147,6 +147,7 @@ condition_occurrence:
     orddd: "ORDDD"
     diagfg: DIAGTYPECD
     ruleout: DIAGKINDCD
+    patfg: "GENRFLAGCD"
     # local_kcd파일의 컬럼 정의
     diagcode: TERMCD
     fromdate: TERMFROMDD

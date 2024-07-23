@@ -1557,8 +1557,7 @@ class MeasurementDiagTransformer(DataTransformer):
 
             source[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
             source[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
-            # source = source[(source[self.orddate] >= source[self.fromdate]) & (source[self.orddate] <= source[self.todate])]
-            # logging.debug(f"EDI코드 사용기간별 필터 적용 후 데이터 row수: {len(source)}")
+
             source = pd.merge(source, local_edi, left_on=[self.ordcode, self.spccd, self.hospital], right_on=[self.ordcode, self.spccd, self.hospital], how="left", suffixes=('', '_order'))
             source = source[(source[self.orddate] >= source[self.fromdate]) & (source[self.orddate] <= source[self.todate])]
             del local_edi
@@ -2145,7 +2144,8 @@ class MeasurementVSTransformer(DataTransformer):
             source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.orddd] + ';' + ';'
 
             # 원천에서 조건걸기
-            source[self.measurement_date] = pd.to_datetime(source[self.measurement_date])
+            source["처방일"] = source[self.measurement_date]
+            source[self.measurement_date] = pd.to_datetime(source[self.measurement_date], errors="coerce")
             source = source[(source[self.measurement_date] <= self.data_range)]
             logging.debug(f'조건 적용후 원천 데이터 row수: {len(source)}')
 
@@ -2257,7 +2257,7 @@ class MeasurementVSTransformer(DataTransformer):
                 "환자구분": source["visit_source_value"],
                 "진료과": None,
                 "진료과명": None,
-                "처방일": None,
+                "처방일": source["처방일"],
                 "진료일시": source[self.orddd],
                 "접수일시": None,
                 "실시일시": None,
@@ -2380,10 +2380,6 @@ class MeasurementNITransformer(DataTransformer):
             source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
             source = source.drop_duplicates()
             logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}")
-
-
-            # 값이 없는 경우 0으로 값 입력
-            # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
 
             ### concept_etc테이블과 병합 ###
             concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)            
