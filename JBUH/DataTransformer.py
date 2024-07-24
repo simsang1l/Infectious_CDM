@@ -1328,6 +1328,10 @@ class DrugexposureTransformer(DataTransformer):
             source = source[source[self.medtime].notna()]
             logging.info(f"조건 적용후 원천 데이터 row수:, {len(source)}")
 
+            # person table과 병합
+            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
+            logging.info(f"person 테이블과 결합 후 데이터 row수: {len(source)}")
+            
             local_edi = local_edi[[self.ordcode, self.fromdate, self.todate, self.insedicode, "concept_id", self.atccode, self.atccodename]]
             local_edi[self.fromdate] = pd.to_datetime(local_edi[self.fromdate] , format="%Y%m%d", errors="coerce")
             # local_edi[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
@@ -1341,10 +1345,6 @@ class DrugexposureTransformer(DataTransformer):
             logging.info(f"local_edi와 병합 후 데이터 row수:, {len(source)}")
             source = source[(source[self.drug_exposure_start_datetime] >= source[self.fromdate]) & (source[self.drug_exposure_start_datetime] <= source[self.todate])]
             logging.info(f"local_edi날짜 조건 적용 후 데이터 row수: {len(source)}")
-
-            # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
-            logging.info(f"person 테이블과 결합 후 데이터 row수: {len(source)}")
 
             # care_site table과 병합
             source = pd.merge(source, care_site_data, left_on=self.meddept, right_on="care_site_source_value", how="left")
