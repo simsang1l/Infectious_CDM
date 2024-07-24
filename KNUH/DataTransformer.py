@@ -51,8 +51,10 @@ class DataTransformer:
         self.local_kcd_data = self.config["local_kcd_data"]
         self.hospital_code = self.config["hospital_code"]
 
+        # 의료기관이 여러개인 경우 의료기관 코드 폴더 생성
+        os.makedirs(os.path.join(self.cdm_path, self.hospital_code), exist_ok = True)
         # 상병조건이 있다면 조건에 맞는 폴더 생성
-        os.makedirs(os.path.join(self.cdm_path, self.diag_condition ), exist_ok = True)
+        os.makedirs(os.path.join(self.cdm_path, self.hospital_code, self.diag_condition), exist_ok = True)
 
     def load_config(self, config_path):
         """
@@ -67,7 +69,7 @@ class DataTransformer:
         path_type에 따라 'source' 또는 'CDM' 경로에서 파일을 읽습니다.
         """
         if path_type == "source":
-            full_path = os.path.join(self.config["source_path"], hospital_code, file_name + ".csv")
+            full_path = os.path.join(self.config["source_path"], file_name + ".csv")
             default_encoding = self.source_encoding
             
         elif path_type == "CDM":
@@ -1393,7 +1395,7 @@ class MeasurementEDITransformer(DataTransformer):
             source = pd.merge(order_data, edi_data, left_on=[self.ordercode, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
             logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
 
-            source = source[(source[self.fromdd] <= source[self.order_fromdate]) &  (source[self.fromdd] <= source[self.order_todate])]
+            source = source[(source[self.order_fromdate] >= source[self.fromdd]) &  (source[self.order_fromdate] <= source[self.todd])]
             logging.debug(f'조건 적용 후 데이터 row수: {len(source)}')
 
             concept_data = concept_data.sort_values(by = ["vocabulary_id"], ascending=[False])
@@ -3049,7 +3051,7 @@ class ProcedureEDITransformer(DataTransformer):
             # 처방코드 마스터와 수가코드 매핑
             source = pd.merge(order_data, edi_data, left_on=[self.ordercode, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
             logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
-            source = source[(source["FROMDD_y"] <= source["FROMDD_x"]) & (source["FROMDD_y"] <= source["TODD_x"])]
+            source = source[(source["FROMDD_x"] <= source["FROMDD_y"]) & (source["FROMDD_x"] <= source["TODD_y"])]
             logging.debug(f'조건 적용 후 데이터 row수: {len(source)}')
 
             # fromdate, todate 설정
