@@ -292,7 +292,7 @@ class ProviderTransformer(DataTransformer):
                 "specialty_source_value": source_data[self.specialty_source_value],
                 "specialty_source_value_name": None,
                 "specialty_source_concept_id": 0,
-                "gender_source_value": self.gender_source_value,
+                "gender_source_value": source_data[self.gender_source_value],
                 "gender_source_concept_id": np.select(gender_conditions, gender_concept_id, default = 0),
                 })
 
@@ -1394,8 +1394,9 @@ class MeasurementEDITransformer(DataTransformer):
             # 처방코드 마스터와 수가코드 매핑
             source = pd.merge(order_data, edi_data, left_on=[self.ordercode, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
             logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
-
-            source = source[(source[self.order_fromdate] >= source[self.fromdd]) &  (source[self.order_fromdate] <= source[self.todd])]
+            
+            # 검사코드 마스터 테이블은 코드 사용기간에 따른 이력이 없으므로 검사코드 사용기간 조건 제외
+            # source = source[(source[self.order_fromdate] >= source[self.fromdd]) &  (source[self.order_fromdate] <= source[self.todd])]
             logging.debug(f'조건 적용 후 데이터 row수: {len(source)}')
 
             concept_data = concept_data.sort_values(by = ["vocabulary_id"], ascending=[False])
@@ -1406,8 +1407,8 @@ class MeasurementEDITransformer(DataTransformer):
             source = pd.merge(source, concept_data, left_on=self.edicode, right_on="concept_code", how="left")
             logging.debug(f'concept merge후 데이터 row수: {len(source)}')
 
-            source[self.fromdate] = source[self.order_fromdate].where(source[self.fromdd].notna(), source[self.fromdd])
-            source[self.todate] = source[self.order_todate].where(source[self.todd].notna(), source[self.todd])
+            source[self.fromdate] = source[self.fromdd].where(source[self.fromdd].notna(), source[self.order_fromdate])
+            source[self.todate] = source[self.todd].where(source[self.todd].notna(), source[self.order_todate])
 
 
             # drug의 경우 KCD, EDI 순으로 매핑
@@ -1593,7 +1594,7 @@ class MeasurementDiagTransformer(DataTransformer):
             source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.orddate] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
             source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
             # visit_detail로 인해 중복되는 항목 제거를 위함.
-            source = source.drop_duplicates(subset=[self.person_source_value, self.orddd, self.hospital, self.visit_no, self.measurement_source_value, self.ordcode, self.spccd])
+            source = source.drop_duplicates(subset=[self.hospital, self.person_source_value, self.orddd, self.orddate, self.visit_no, self.measurement_source_value, self.ordcode, self.spccd])
             logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}")
 
             # 값이 없는 경우 0으로 값 입력
@@ -2074,8 +2075,9 @@ class MeasurementpthTransformer(DataTransformer):
                 })
                 
             cdm = cdm.drop_duplicates()
+            cdm.reset_index(drop=True, inplace=True)
 
-            cdm["measurement_id"] = source.index + 1
+            cdm["measurement_id"] = cdm.index + 1
 
             logging.debug(f'CDM 데이터 row수: {len(cdm)}')
             logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
@@ -3051,7 +3053,7 @@ class ProcedureEDITransformer(DataTransformer):
             # 처방코드 마스터와 수가코드 매핑
             source = pd.merge(order_data, edi_data, left_on=[self.ordercode, self.hospital], right_on=[self.sugacode, self.hospital], how="left")
             logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
-            source = source[(source["FROMDD_x"] <= source["FROMDD_y"]) & (source["FROMDD_x"] <= source["TODD_y"])]
+            source = source[(source["FROMDD_x"] >= source["FROMDD_y"]) & (source["FROMDD_x"] <= source["TODD_y"])]
             logging.debug(f'조건 적용 후 데이터 row수: {len(source)}')
 
             # fromdate, todate 설정
@@ -3261,7 +3263,7 @@ class ProcedurePACSTransformer(DataTransformer):
         """
         try :                
             cdm = pd.DataFrame({
-                "procedure_occurrence_id": source.index + 1,
+                "procedure_occurrence_id": 1,
                 "person_id": source["person_id"],
                 "환자명": source["환자명"],
                 "procedure_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
@@ -3300,6 +3302,11 @@ class ProcedurePACSTransformer(DataTransformer):
                 "결론 및 진단": source[self.conclusion],
                 "결과단위": None
                 })
+            
+            cdm = cdm.drop_duplicates()
+            cdm.reset_index(drop=True, inplace=True)
+
+            cdm["procedure_occurrence_id"] = cdm.index + 1
 
             logging.debug(f'CDM 데이터 row수, {len(cdm)}')
             logging.debug(f"요약:\n{source.describe(include = 'all').T.to_string()}")
