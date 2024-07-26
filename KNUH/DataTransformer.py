@@ -50,6 +50,8 @@ class DataTransformer:
         self.concept_kcd = self.config["concept_kcd"]
         self.local_kcd_data = self.config["local_kcd_data"]
         self.hospital_code = self.config["hospital_code"]
+        self.care_site_fromdate = self.config["care_site_fromdate"]
+        self.care_site_todate = self.config["care_site_todate"]
 
         # 의료기관이 여러개인 경우 의료기관 코드 폴더 생성
         os.makedirs(os.path.join(self.cdm_path, self.hospital_code), exist_ok = True)
@@ -68,12 +70,15 @@ class DataTransformer:
         CSV 파일을 읽어 DataFrame으로 반환합니다.
         path_type에 따라 'source' 또는 'CDM' 경로에서 파일을 읽습니다.
         """
+        hospital_code = self.hospital_code
         if path_type == "source":
             full_path = os.path.join(self.config["source_path"], file_name + ".csv")
             default_encoding = self.source_encoding
             
         elif path_type == "CDM":
-            if self.diag_condition:
+            if hospital_code :
+                full_path = os.path.join(self.config["CDM_path"], hospital_code, self.diag_condition, file_name + ".csv")
+            elif self.diag_condition:
                 full_path = os.path.join(self.config["CDM_path"], self.diag_condition, file_name + ".csv")
             else :
                 full_path = os.path.join(self.config["CDM_path"], file_name + ".csv")
@@ -198,7 +203,9 @@ class CareSiteTransformer(DataTransformer):
                 "place_of_service_concept_id": self.place_of_service_concept_id,            
                 "location_id": location.loc[location[self.location_source_value] == self.target_zip, "LOCATION_ID"].tolist()[0],
                 "care_site_source_value": source_data[self.care_site_source_value],
-                "place_of_service_source_value": source_data[self.place_of_service_source_value] 
+                "place_of_service_source_value": source_data[self.place_of_service_source_value],
+                self.care_site_fromdate: source_data[self.care_site_fromdate],
+                self.care_site_todate: source_data[self.care_site_todate]
             })
 
             logging.debug(f"CDM 데이터 row수: {len(cdm)}")
@@ -278,7 +285,7 @@ class ProviderTransformer(DataTransformer):
             gender_concept_id = [8507, 8532]  
 
             cdm = pd.DataFrame({
-                "provider_id" : source_data.index + 1,
+                "provider_id" : 1, #source_data.index + 1,
                 "provider_name": source_data[self.provider_name],
                 "npi": None,
                 "dea": None,
@@ -295,6 +302,10 @@ class ProviderTransformer(DataTransformer):
                 "gender_source_value": source_data[self.gender_source_value],
                 "gender_source_concept_id": np.select(gender_conditions, gender_concept_id, default = 0),
                 })
+            cdm = cdm.drop_duplicates()
+            cdm.reset_index(drop=True, inplace = True)
+
+            cdm["provider_id"] = cdm.index +  1
 
             logging.debug(f"CDM 데이터 row수: {len(cdm)}")
             logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
@@ -510,6 +521,13 @@ class VisitOccurrenceTransformer(DataTransformer):
 
             source = pd.merge(source, care_site_data, left_on = [self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             logging.debug(f"care_site 테이블과 결합 후 원천 데이터1 row수: {len(source)}")
+            
+            source[self.care_site_fromdate] = pd.to_datetime(source[self.care_site_fromdate], errors="coerce")
+            source[self.care_site_todate] = pd.to_datetime(source[self.care_site_todate], errors="coerce")
+            source[self.care_site_fromdate] = source[self.care_site_fromdate].fillna("19000101")
+            source[self.care_site_todate] = source[self.care_site_todate].fillna("20991231")
+            source= source[(source[self.care_site_fromdate] <= source[self.meddate]) & (source[self.meddate] <= source[self.care_site_todate])]
+            logging.debug(f"care_site 사용 기간 조건 설정 후 원천 데이터1 row수: {len(source)}")
 
             source = pd.merge(source, provider_data, left_on = self.orddr, right_on="provider_source_value", how="left", suffixes=('', '_y'))
             # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
@@ -533,6 +551,13 @@ class VisitOccurrenceTransformer(DataTransformer):
 
             source2 = pd.merge(source2, care_site_data, left_on = [self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             logging.debug(f"care_site 테이블과 결합 후 원천 데이터2 row수: {len(source2)}")
+
+            source2[self.care_site_fromdate] = pd.to_datetime(source2[self.care_site_fromdate], errors="coerce")
+            source2[self.care_site_todate] = pd.to_datetime(source2[self.care_site_todate], errors="coerce")
+            source2[self.care_site_fromdate] = source2[self.care_site_fromdate].fillna("19000101")
+            source2[self.care_site_todate] = source2[self.care_site_todate].fillna("20991231")
+            source2 = source2[(source2[self.care_site_fromdate] <= source2[self.admdate]) & (source2[self.admdate] <= source2[self.care_site_todate])]
+            logging.debug(f"care_site 사용 기간 조건 설정 후 원천 데이터2 row수: {len(source2)}")
 
             source2 = pd.merge(source2, provider_data, left_on = self.chadr, right_on="provider_source_value", how="left", suffixes=('', '_y'))
             source2.loc[source2["care_site_id"].isna(), "care_site_id"] = 0
@@ -711,9 +736,16 @@ class VisitDetailTransformer(DataTransformer):
             source = pd.merge(source, care_site_data, left_on = [self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             logging.debug(f"care_site 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
-            # 병동명을 위한 care_site table과 병합
-            source = pd.merge(source, care_site_data, left_on=self.wardno, right_on="care_site_source_value", how="left", suffixes=('', '_wardno'))
-            logging.debug(f"병동명을 위한 care_site 테이블과 결합 후 원천 데이터 row수: {len(source)}")
+            source[self.care_site_fromdate] = pd.to_datetime(source[self.care_site_fromdate], errors="coerce")
+            source[self.care_site_todate] = pd.to_datetime(source[self.care_site_todate], errors="coerce")
+            source[self.care_site_fromdate] = source[self.care_site_fromdate].fillna("19000101")
+            source[self.care_site_todate] = source[self.care_site_todate].fillna("20991231")
+            source= source[(source[self.care_site_fromdate] <= source[self.admdate]) & (source[self.admdate] <= source[self.care_site_todate])]
+            logging.debug(f"care_site 사용 기간 조건 설정 후 원천 데이터 row수: {len(source)}")
+
+            # # 병동명을 위한 care_site table과 병합
+            # source = pd.merge(source, care_site_data, left_on=self.wardno, right_on="care_site_source_value", how="left", suffixes=('', '_wardno'))
+            # logging.debug(f"병동명을 위한 care_site 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
             # provider table과 병합
             source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
@@ -770,7 +802,7 @@ class VisitDetailTransformer(DataTransformer):
                 "visit_detail_type_concept_id_name": np.select([source["concept_name"].notna()], [source["concept_name"]], default=self.no_matching_concept[1]),
                 "provider_id": source["provider_id"],
                 "care_site_id": source["care_site_id"],
-                "visit_detail_source_value": self.visit_detail_source_value,
+                "visit_detail_source_value": source[self.visit_detail_source_value],
                 "visit_detail_source_concept_id": self.no_matching_concept[0],
                 "admitted_from_concept_id": self.no_matching_concept[0],
                 "admitted_from_source_value": self.admitted_from_source_value,
@@ -780,8 +812,8 @@ class VisitDetailTransformer(DataTransformer):
                 "visit_occurrence_id": source["visit_occurrence_id"],
                 "진료과": source[self.meddept],
                 "진료과명": source["care_site_name"],
-                "병동번호": source[self.wardno],
-                "병동명": source["care_site_name_wardno"]
+                "병동번호": None, # source[self.wardno],
+                "병동명": None, # source["care_site_name_wardno"]
                 })
 
             cdm = cdm[cdm["visit_detail_start_datetime"] <= self.data_range]
@@ -985,6 +1017,13 @@ class ConditionOccurrenceTransformer(DataTransformer):
             # care_site table과 병합
             source = pd.merge(source, care_site_data, left_on=[self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             logging.debug(f"care_site 테이블과 결합 후 원천 데이터 row수: {len(source)}")
+            
+            source[self.care_site_fromdate] = pd.to_datetime(source[self.care_site_fromdate], errors="coerce")
+            source[self.care_site_todate] = pd.to_datetime(source[self.care_site_todate], errors="coerce")
+            source[self.care_site_fromdate] = source[self.care_site_fromdate].fillna("19000101")
+            source[self.care_site_todate] = source[self.care_site_todate].fillna("20991231")
+            source= source[(source[self.care_site_fromdate] <= source[self.condition_start_datetime]) & (source[self.condition_start_datetime] <= source[self.care_site_todate])]
+            logging.debug(f"care_site 사용 기간 조건 설정 후 원천 데이터 row수: {len(source)}")
 
             # provider table과 병합
             source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
@@ -1232,7 +1271,7 @@ class DrugexposureTransformer(DataTransformer):
             logging.info(f"local_edi날짜 조건 적용 후 데이터 row수: {len(source)}")
 
             person_data = person_data[["person_id", "person_source_value", "환자명"]]
-            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "place_of_service_source_value", "care_site_name"]]
+            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "place_of_service_source_value", "care_site_name", self.care_site_fromdate, self.care_site_todate]]
             provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
             visit_data = visit_data[["visit_occurrence_id", "visit_start_date", "care_site_id", "visit_source_value", "person_id", "visit_source_key"]]
 
@@ -1243,6 +1282,13 @@ class DrugexposureTransformer(DataTransformer):
             # care_site table과 병합
             source = pd.merge(source, care_site_data, left_on=[self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             logging.info(f"care_site 테이블과 결합 후 데이터 row수: {len(source)}")
+
+            source[self.care_site_fromdate] = pd.to_datetime(source[self.care_site_fromdate], errors = "coerce")
+            source[self.care_site_todate] = pd.to_datetime(source[self.care_site_todate], errors = "coerce")
+            source[self.care_site_fromdate] = source[self.care_site_fromdate].fillna("19000101")
+            source[self.care_site_todate] = source[self.care_site_todate].fillna("20991231")
+            source= source[(source[self.care_site_fromdate] <= source[self.drug_exposure_start_datetime]) & (source[self.drug_exposure_start_datetime] <= source[self.care_site_todate])]
+            logging.debug(f"care_site 사용 기간 조건 설정 후 원천 데이터 row수: {len(source)}")
 
             # provider table과 병합
             source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
@@ -1558,7 +1604,7 @@ class MeasurementDiagTransformer(DataTransformer):
     
             # 데이터 컬럼 줄이기
             person_data = person_data[["person_id", "person_source_value", "환자명"]]
-            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "place_of_service_source_value", "care_site_name"]]
+            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "place_of_service_source_value", "care_site_name", self.care_site_fromdate, self.care_site_todate]]
             provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
             visit_data = visit_data[["visit_occurrence_id", "visit_start_date", "care_site_id", "visit_source_value", "person_id", "visit_source_key"]]
 
@@ -1571,6 +1617,13 @@ class MeasurementDiagTransformer(DataTransformer):
             source = pd.merge(source, care_site_data, left_on=[self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             del care_site_data
             logging.debug(f'care_site 테이블과 결합 후 데이터 row수: {len(source)}')
+
+            source[self.care_site_fromdate] = pd.to_datetime(source[self.care_site_fromdate], errors = "coerce")
+            source[self.care_site_todate] = pd.to_datetime(source[self.care_site_todate], errors = "coerce")
+            source[self.care_site_fromdate] = source[self.care_site_fromdate].fillna("19000101")
+            source[self.care_site_todate] = source[self.care_site_todate].fillna("20991231")
+            source= source[(source[self.care_site_fromdate] <= source[self.orddate]) & (source[self.orddate] <= source[self.care_site_todate])]
+            logging.debug(f"care_site 사용 기간 조건 설정 후 원천 데이터 row수: {len(source)}")
 
             # provider table과 병합
             source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
@@ -1885,7 +1938,7 @@ class MeasurementpthTransformer(DataTransformer):
 
             # 데이터 컬럼 줄이기
             person_data = person_data[["person_id", "person_source_value", "환자명"]]
-            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "place_of_service_source_value", "care_site_name"]]
+            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "place_of_service_source_value", "care_site_name", self.care_site_fromdate, self.care_site_todate]]
             provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
             visit_data = visit_data[["visit_occurrence_id", "visit_start_date", "care_site_id", "visit_source_value", "person_id", "visit_source_key"]]
 
@@ -1898,6 +1951,13 @@ class MeasurementpthTransformer(DataTransformer):
             source = pd.merge(source, care_site_data, left_on=[self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             del care_site_data
             logging.debug(f'care_site 테이블과 결합 후 데이터 row수: {len(source)}')
+
+            source[self.care_site_fromdate] = pd.to_datetime(source[self.care_site_fromdate], errors = "coerce")
+            source[self.care_site_todate] = pd.to_datetime(source[self.care_site_todate], errors = "coerce")
+            source[self.care_site_fromdate] = source[self.care_site_fromdate].fillna("19000101")
+            source[self.care_site_todate] = source[self.care_site_todate].fillna("20991231")
+            source= source[(source[self.care_site_fromdate] <= source[self.orddate]) & (source[self.orddate] <= source[self.care_site_todate])]
+            logging.debug(f"care_site 사용 기간 조건 설정 후 원천 데이터 row수: {len(source)}")
 
             # provider table과 병합
             source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
@@ -3214,6 +3274,13 @@ class ProcedurePACSTransformer(DataTransformer):
             # care_site table과 병합
             source = pd.merge(source, care_site_data, left_on=self.meddept, right_on="care_site_source_value", how="left")
             logging.debug(f'care_site 테이블과 결합 후 데이터 row수, {len(source)}')
+
+            source[self.care_site_fromdate] = pd.to_datetime(source[self.care_site_fromdate], errors = "coerce")
+            source[self.care_site_todate] = pd.to_datetime(source[self.care_site_todate], errors = "coerce")
+            source[self.care_site_fromdate] = source[self.care_site_fromdate].fillna("19000101")
+            source[self.care_site_todate] = source[self.care_site_todate].fillna("20991231")
+            source= source[(source[self.care_site_fromdate] <= source[self.orddate]) & (source[self.orddate] <= source[self.care_site_todate])]
+            logging.debug(f"care_site 사용 기간 조건 설정 후 원천 데이터 row수: {len(source)}")
 
             # provider table과 병합
             source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))

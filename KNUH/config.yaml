@@ -25,6 +25,8 @@ drug_edi_data: "drug_edi"
 edicode: "INSUEDICD"
 fromdate: "FROMDATE"
 todate: "TODATE"
+care_site_fromdate: "VALIFROMDD"
+care_site_todate: "VALITODD"
 visit_no: "CRETNO"
 sheet_meta: "메타데이터진단"
 # diag_condition ex. 'A9380' 'A753' 'A31'
