@@ -49,8 +49,8 @@ if __name__ == "__main__":
         measurement_vs = MeasurementVSTransformer(config)
         measurement_vs.transform()
 
-        # measurement_ni = MeasurementNITransformer(config)
-        # measurement_ni.transform()
+        measurement_ni = MeasurementNITransformer(config)
+        measurement_ni.transform()
 
         merge_measurement = MergeMeasurementTransformer(config)
         merge_measurement.transform()
