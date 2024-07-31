@@ -7,10 +7,14 @@ import logging
 import warnings
 import inspect
 
-# 현재 프로세스의 PID를 얻습니다.
-pid = os.getpid()
-# 현재 프로세스 객체를 얻습니다.
-ps = psutil.Process(pid)
+# 숫자 값을 유지하고, 문자가 포함된 값을 NaN으로 대체하는 함수 정의
+def convert_to_numeric(value):
+    try:
+        # pd.to_numeric을 사용하여 숫자로 변환 시도
+        return pd.to_numeric(value)
+    except ValueError:
+        # 변환이 불가능한 경우 NaN 반환
+        return np.nan
 
 class DataTransformer:
     """
@@ -1548,11 +1552,14 @@ class MeasurementStexmrstTransformer(DataTransformer):
             source[self.medtime] = pd.to_datetime(source[self.medtime], errors = "coerce")
 
             # value_as_number float형태로 저장되게 값 변경
-            source["value_as_number"] = source[self.value_source_value].str.extract('(-?\d+\.\d+|\d+)')
+            # source["value_as_number"] = source[self.value_source_value].str.extract('(-?\d+\.\d+|\d+)')
+            source["value_as_number"] = source[self.value_source_value].apply(convert_to_numeric)
             source["value_as_number"] = source["value_as_number"].astype(float)
-            source[self.range_low] = source[self.range_low].str.extract('(-?\d+\.\d+|\d+)')
+            # source[self.range_low] = source[self.range_low].str.extract('(-?\d+\.\d+|\d+)')
+            source[self.range_low] = source[self.range_low].apply(convert_to_numeric)
             source[self.range_low] = source[self.range_low].astype(float)
-            source[self.range_high] = source[self.range_high].str.extract('(-?\d+\.\d+|\d+)')
+            # source[self.range_high] = source[self.range_high].str.extract('(-?\d+\.\d+|\d+)')
+            source[self.range_high] = source[self.range_high].apply(convert_to_numeric)
             source[self.range_high] = source[self.range_high].astype(float)
 
             logging.debug(f'조건적용 후 원천 데이터 row수: {len(source)}')
