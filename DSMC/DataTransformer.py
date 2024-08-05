@@ -7,6 +7,15 @@ import logging
 import warnings
 import inspect
 
+# 숫자 값을 유지하고, 문자가 포함된 값을 NaN으로 대체하는 함수 정의
+def convert_to_numeric(value):
+    try:
+        # pd.to_numeric을 사용하여 숫자로 변환 시도
+        return pd.to_numeric(value)
+    except ValueError:
+        # 변환이 불가능한 경우 NaN 반환
+        return np.nan
+    
 class DataTransformer:
     """
     기본 데이터 변환 클래스.
@@ -36,14 +45,21 @@ class DataTransformer:
         self.target_zip = self.config["target_zip"]
         self.location_data = self.config["location_data"]
         self.concept_unit = self.config["concept_unit"]
-        self.visit_source_key = self.config["visit_source_key"]
+        self.source_key = self.config["source_key"]
         self.hospital = self.config["hospital"]
         self.edicode = self.config["edicode"]
         self.concept_etc = self.config["concept_etc"]
         self.concept_kcd = self.config["concept_kcd"]
         self.unit_concept_synonym = self.config["unit_concept_synonym"]
         self.diag_condition = self.config["diag_condition"]
-        self.no_matching_concept= self.config["no_matching_concept"]
+        self.no_matching_concept = self.config["no_matching_concept"]
+        
+        self.ordcode = self.config["ordcode"]
+        self.ordname = self.config["ordname"]
+        self.edicode = self.config["edicode"]
+        self.fromdate = self.config["fromdate"]
+        self.todate = self.config["todate"]
+        self.hospital_code = self.config["hospital_code"]
 
         # 상병조건이 있다면 조건에 맞는 폴더 생성
         os.makedirs(os.path.join(self.cdm_path, self.diag_condition ), exist_ok = True)
@@ -246,8 +262,8 @@ class ProviderTransformer(DataTransformer):
 
             source = pd.merge(source_data,
                             care_site,
-                            left_on = self.care_site_source_value,
-                            right_on = "care_site_source_value",
+                            left_on = [self.care_site_source_value, self.hospital],
+                            right_on = ["care_site_source_value", "place_of_service_source_value"],
                             how = "left")
             logging.debug(f"care_site와 결합 후 원천 데이터 row수: {len(source_data)}")
 
@@ -284,7 +300,7 @@ class ProviderTransformer(DataTransformer):
             
             cdm = pd.DataFrame({
                 "provider_id" : source_data.index + 1,
-                "provider_name": source_data[self.provider_name],
+                "provider_name": self.provider_name,
                 "npi": None,
                 "dea": None,
                 "specialty_concept_id": source_data["specialty_concept_id"],
@@ -298,7 +314,8 @@ class ProviderTransformer(DataTransformer):
                 "specialty_source_value_name": source_data[self.specialty_source_value_name],
                 "specialty_source_concept_id": self.no_matching_concept[0],
                 "gender_source_value": source_data[self.gender_source_value], #np.select([source[gender_source_value].isna()], None, default = None),
-                "gender_source_concept_id": source_data["gender_concept_id"]
+                "gender_source_concept_id": source_data["gender_concept_id"],
+                "병원구분": source_data[self.hospital]
                 })
 
             logging.debug(f"CDM 데이터 row수: {len(cdm)}")
@@ -330,8 +347,6 @@ class PersonTransformer(DataTransformer):
         self.abotyp = self.cdm_config["columns"]["abotyp"]
         self.rhtyp = self.cdm_config["columns"]["rhtyp"]
         self.diagcode = self.cdm_config["columns"]["diagcode"]
-        self.ruleoutyn = self.cdm_config["columns"]["ruleoutyn"]
-        self.diagfg = self.cdm_config["columns"]["diagfg"]
 
     def transform(self):
         """
@@ -375,10 +390,8 @@ class PersonTransformer(DataTransformer):
             if self.diag_condition:
                 condition = self.read_csv(self.source_condition, path_type=self.source_flag, dtype=self.source_dtype)
                 condition = condition[condition[self.diagcode].str.startswith(self.diag_condition, na=False)]
-                condition = condition[condition[self.ruleoutyn].notna()]
                 condition = condition[self.person_source_value].drop_duplicates()
                 
-
                 source_data = pd.merge(source_data, condition, on=self.person_source_value, how = "inner", suffixes=('', '_diag'))
 
             logging.debug(f"CDM테이블과 결합 후 원천 데이터 row수: source: {len(source_data)}")
@@ -423,7 +436,7 @@ class PersonTransformer(DataTransformer):
                 "provider_id": None,
                 "care_site_id": None, 
                 "person_source_value": source[self.person_source_value],
-                "환자명": source[self.person_name],
+                "환자명": self.person_name,
                 "gender_source_value": source[self.gender_source_value],
                 "gender_source_concept_id": np.select(gender_conditions, gender_concept_id, default = self.no_matching_concept[0]),
                 "race_source_value": source[self.race_source_value],
@@ -466,10 +479,6 @@ class VisitOccurrenceTransformer(DataTransformer):
 
         self.meddept = self.cdm_config["columns"]["meddept"]
         self.meddr = self.cdm_config["columns"]["meddr"]
-        self.medtime = self.cdm_config["columns"]["medtime"]
-        self.chadr = self.cdm_config["columns"]["chadr"]
-        self.admtime = self.cdm_config["columns"]["admtime"]
-        self.dschtime = self.cdm_config["columns"]["dschtime"]
         self.visit_start_datetime = self.cdm_config["columns"]["visit_start_datetime"]
         self.visit_end_datetime = self.cdm_config["columns"]["visit_end_datetime"]
         self.admitted_from_source_value = self.cdm_config["columns"]["admitted_from_source_value"]
@@ -509,6 +518,7 @@ class VisitOccurrenceTransformer(DataTransformer):
             logging.debug(f"원천 데이터 row수: source: {len(source)}")
 
             # 원천 데이터 범위 설정
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.source_key]
             source[self.visit_start_datetime] = pd.to_datetime(source[self.visit_start_datetime], errors = "coerce")
             source[self.visit_end_datetime] = pd.to_datetime(source[self.visit_end_datetime], errors = "coerce")
             source = source[source[self.visit_start_datetime] <= self.data_range]
@@ -519,10 +529,10 @@ class VisitOccurrenceTransformer(DataTransformer):
             source = source.drop(columns = ["care_site_id", "provider_id"])
             logging.debug(f"person 테이블과 결합 후 원천 데이터1 row수: {len(source)}")
 
-            source = pd.merge(source, care_site_data, left_on = self.meddept, right_on="care_site_source_value", how="left")
+            source = pd.merge(source, care_site_data, left_on = [self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             logging.debug(f"care_site 테이블과 결합 후 원천 데이터1 row수: {len(source)}")
 
-            source = pd.merge(source, provider_data, left_on = self.meddr, right_on="provider_source_value", how="left", suffixes=('', '_y'))
+            source = pd.merge(source, provider_data, left_on = [self.meddr, self.hospital], right_on=["provider_source_value", self.hospital], how="left", suffixes=('', '_y'))
             # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
             logging.debug(f"provider 테이블과 결합 후 원천 데이터1 row수: {len(source)}")
 
@@ -536,7 +546,7 @@ class VisitOccurrenceTransformer(DataTransformer):
         except Exception as e :
             logging.error(f"{self.table} 테이블 소스 데이터 처리 중 오류: {e}", exc_info = True)
 
-    def transform_cdm(self, source, source2):
+    def transform_cdm(self, source):
         """
         주어진 소스 데이터를 CDM 형식에 맞게 변환하는 메소드.
         변환된 데이터는 새로운 DataFrame으로 구성됩니다.
@@ -550,22 +560,22 @@ class VisitOccurrenceTransformer(DataTransformer):
             ]
             visit_concept_id = [9202, 9201, 9203]
 
-            admit_condition = [
-                source[self.admitted_from_source_value].isin(["1", "6"]),
-                source[self.admitted_from_source_value].isin(["3"]),
-                source[self.admitted_from_source_value].isin(["7"]),
-                source[self.admitted_from_source_value].isin(["9"])
-                ]
-            admit_concept_id = [8765, 8892, 8870, 8844]
+            # admit_condition = [
+            #     source[self.admitted_from_source_value].isin(["1", "6"]),
+            #     source[self.admitted_from_source_value].isin(["3"]),
+            #     source[self.admitted_from_source_value].isin(["7"]),
+            #     source[self.admitted_from_source_value].isin(["9"])
+            #     ]
+            # admit_concept_id = [8765, 8892, 8870, 8844]
 
-            discharge_condition = [
-                source[self.discharge_to_source_value].isin(["1"]),
-                source[self.discharge_to_source_value].isin(["2"]),
-                source[self.discharge_to_source_value].isin(["3"]),
-                source[self.discharge_to_source_value].isin(["8"]),
-                source[self.discharge_to_source_value].isin(["9"])
-                ]
-            discharge_concept_id = [44790567, 4061268, 8536, 44814693, 8844]
+            # discharge_condition = [
+            #     source[self.discharge_to_source_value].isin(["1"]),
+            #     source[self.discharge_to_source_value].isin(["2"]),
+            #     source[self.discharge_to_source_value].isin(["3"]),
+            #     source[self.discharge_to_source_value].isin(["8"]),
+            #     source[self.discharge_to_source_value].isin(["9"])
+            #     ]
+            # discharge_concept_id = [44790567, 4061268, 8536, 44814693, 8844]
 
             cdm = pd.DataFrame({
                 "person_id": source["person_id"],
@@ -581,9 +591,9 @@ class VisitOccurrenceTransformer(DataTransformer):
                 "care_site_id": source["care_site_id"],
                 "visit_source_value": source[self.visit_source_value],
                 "visit_source_concept_id": np.select(visit_condition, visit_concept_id, default = self.no_matching_concept[0]),
-                "admitted_from_concept_id": np.select(admit_condition, admit_concept_id, default = self.no_matching_concept[0]),
+                "admitted_from_concept_id": self.no_matching_concept[0], # np.select(admit_condition, admit_concept_id, default = self.no_matching_concept[0]),
                 "admitted_from_source_value": source[self.admitted_from_source_value],
-                "discharge_to_concept_id": np.select(discharge_condition, discharge_concept_id, default = self.no_matching_concept[0]),
+                "discharge_to_concept_id": self.no_matching_concept[0], # np.select(discharge_condition, discharge_concept_id, default = self.no_matching_concept[0]),
                 "discharge_to_source_value": source[self.discharge_to_source_value],
                 "visit_source_key": source["visit_source_key"],
                 "진료과": source[self.meddept],
@@ -623,20 +633,16 @@ class VisitDetailTransformer(DataTransformer):
                         , "visit_detail_type_concept_id", "visit_detail_type_concept_id_name", "provider_id", "care_site_id", "visit_detail_source_value"
                         , "visit_detail_source_concept_id", "admitted_from_concept_id", "admitted_from_source_value"
                         , "discharge_to_source_value", "discharge_to_concept_id", "preceding_visit_detail_id"
-                        , "visit_detail_parent_id", "visit_occurrence_id", "진료과", "진료과명", "병동번호", "병동명"]
+                        , "visit_detail_parent_id", "visit_occurrence_id", "진료과", "진료과명", "병동번호", "병동명", "visit_detail_source_key"]
 
         # 컬럼 변수 재정의    
         self.source_data = self.cdm_config["data"]["source_data"]
         self.output_filename = self.cdm_config["data"]["output_filename"]
-        self.meddept = self.cdm_config["columns"]["meddept"]
-        self.provider = self.cdm_config["columns"]["provider"]
         self.visit_detail_start_datetime = self.cdm_config["columns"]["visit_detail_start_datetime"]
         self.visit_detail_end_datetime = self.cdm_config["columns"]["visit_detail_end_datetime"]
         self.visit_detail_source_value = self.cdm_config["columns"]["visit_detail_source_value"]
         self.admitted_from_source_value = self.cdm_config["columns"]["admitted_from_source_value"]
         self.discharge_to_source_value = self.cdm_config["columns"]["discharge_to_source_value"]
-        self.wardno = self.cdm_config["columns"]["wardno"]
-        self.icu_list = self.cdm_config["columns"]["icu_list"]
 
     def transform(self):
         """
@@ -663,27 +669,18 @@ class VisitDetailTransformer(DataTransformer):
         try :
             source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
             person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
+            # provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
             concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype)
             logging.debug(f"원천 데이터 row수: {len(source)}")
 
             # 원천에서 조건걸기
+            source["visit_detail_source_key"] = source[self.person_source_value] + ';' + source[self.source_key]
             source[self.visit_detail_start_datetime] = pd.to_datetime(source[self.visit_detail_start_datetime])
             source[self.visit_detail_end_datetime] = pd.to_datetime(source[self.visit_detail_end_datetime], errors = "coerce")
             source = source[source[self.visit_detail_start_datetime] <= self.data_range]
             logging.debug(f"조건 적용 후 원천 데이터 row수: {len(source)}")
-
-
-            # # 201903081045같은 데이터가 2019-03-08 10:04:05로 바뀌는 문제 발견 
-            # def convert_datetime_format(x):
-            #     if pd.isna(x):  # x가 NaN인지 확인
-            #         return x
-            #     else:
-            #         return x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:]
-            # source[self.visit_detail_start_datetime] = source[self.visit_detail_start_datetime].apply(convert_datetime_format)
-            # source[self.visit_detail_end_datetime] = source[self.visit_detail_end_datetime].apply(convert_datetime_format)
 
             # person table과 병합
             source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
@@ -691,21 +688,17 @@ class VisitDetailTransformer(DataTransformer):
             logging.debug(f"person 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
             # care_site table과 병합
-            source = pd.merge(source, care_site_data, left_on=self.meddept, right_on="care_site_source_value", how="left")
+            source = pd.merge(source, care_site_data, left_on=[self.visit_detail_source_value, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             logging.debug(f"care_site 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
-            # 병동명을 위한 care_site table과 병합
-            source = pd.merge(source, care_site_data, left_on=self.wardno, right_on="care_site_source_value", how="left", suffixes=('', '_wardno'))
-            logging.debug(f"병동명을 위한 care_site 테이블과 결합 후 원천 데이터 row수: {len(source)}")
-
-            # provider table과 병합
-            source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
-            logging.debug(f"provider 테이블과 결합 후 원천 데이터 row수: {len(source)}")
+            # # provider table과 병합
+            # source = pd.merge(source, provider_data, left_on=[self.provider, self.hospital], right_on=["provider_source_value", "병원구분"], how="left", suffixes=('', '_y'))
+            # logging.debug(f"provider 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
             # visit_occurrence테이블에서 I, E에 해당하는 데이터만 추출
             visit_data = visit_data[visit_data["visit_source_value"].isin(["I", "E"])]
             # visit_occurrence table과 병합
-            source = pd.merge(source, visit_data, left_on=["person_id", self.visit_source_key], right_on=["person_id", "visit_source_key"], how="left", suffixes=('', '_y'))
+            source = pd.merge(source, visit_data, left_on="visit_detail_source_key", right_on="visit_source_key", how="left", suffixes=('', '_y'))
             logging.debug(f"visit_occurrence 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
             source["visit_detail_type_concept_id"] = 44818518
@@ -713,18 +706,18 @@ class VisitDetailTransformer(DataTransformer):
             source = pd.merge(source, concept_etc, left_on="visit_detail_type_concept_id", right_on='concept_id')
             logging.debug(f"CDM 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
-            # 컬럼을 datetime형태로 변경
-            source[self.visit_detail_start_datetime] = pd.to_datetime(source[self.visit_detail_start_datetime])
-            source[self.visit_detail_end_datetime] = pd.to_datetime(source[self.visit_detail_end_datetime], errors="coerce")
-            source["visit_start_datetime"] = pd.to_datetime(source["visit_start_datetime"])
-            source["visit_end_datetime"] = pd.to_datetime(source["visit_end_datetime"])
+            # # 컬럼을 datetime형태로 변경
+            # source[self.visit_detail_start_datetime] = pd.to_datetime(source[self.visit_detail_start_datetime])
+            # source[self.visit_detail_end_datetime] = pd.to_datetime(source[self.visit_detail_end_datetime], errors="coerce")
+            # source["visit_start_datetime"] = pd.to_datetime(source["visit_start_datetime"])
+            # source["visit_end_datetime"] = pd.to_datetime(source["visit_end_datetime"])
             
-            # 에러 발생하는 부분을 최대값으로 처리
-            # 최대 Timestamp 값
-            max_timestamp = pd.Timestamp.max
+            # # 에러 발생하는 부분을 최대값으로 처리
+            # # 최대 Timestamp 값
+            # max_timestamp = pd.Timestamp.max
 
-            # NaT 값을 최대 Timestamp 값으로 대체
-            source["visit_end_datetime"] = source["visit_end_datetime"].fillna(max_timestamp)
+            # # NaT 값을 최대 Timestamp 값으로 대체
+            # source["visit_end_datetime"] = source["visit_end_datetime"].fillna(max_timestamp)
 
             source = source[(source[self.visit_detail_start_datetime] >= source["visit_start_datetime"]) & (source[self.visit_detail_start_datetime] <= source["visit_end_datetime"])]
             # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
@@ -756,15 +749,16 @@ class VisitDetailTransformer(DataTransformer):
                 "visit_detail_source_value": self.visit_detail_source_value,
                 "visit_detail_source_concept_id": self.no_matching_concept[0],
                 "admitted_from_concept_id": self.no_matching_concept[0],
-                "admitted_from_source_value": source[self.admitted_from_source_value],
-                "discharge_to_source_value": source[self.discharge_to_source_value],
+                "admitted_from_source_value": self.admitted_from_source_value,
+                "discharge_to_source_value": self.discharge_to_source_value,
                 "discharge_to_concept_id": self.no_matching_concept[0],
                 "visit_detail_parent_id": None,
                 "visit_occurrence_id": source["visit_occurrence_id"],
-                "진료과": source[self.meddept],
+                "진료과": source[self.visit_detail_source_value],
                 "진료과명": source["care_site_name"],
-                "병동번호": source[self.wardno],
-                "병동명": source["care_site_name_wardno"]
+                "병동번호": None,
+                "병동명": None,
+                "visit_detail_source_key": source["visit_detail_source_key"]
                 })
 
             # 컬럼 생성
@@ -799,10 +793,7 @@ class LocalKCDTransformer(DataTransformer):
         self.diagcode = self.cdm_config["columns"]["diagcode"]
         self.fromdate = self.cdm_config["columns"]["fromdate"]
         self.todate = self.cdm_config["columns"]["todate"]
-        self.engname = self.cdm_config["columns"]["engname"]
         self.korname = self.cdm_config["columns"]["korname"]
-        self.stdiagcd = self.cdm_config["columns"]["stdiagcd"]
-        self.kcdversion = self.cdm_config["columns"]["kcdversion"]
         # columns in concept table
         self.concept_id = self.cdm_config["columns"]["concept_id"]
         self.concept_name = self.cdm_config["columns"]["concept_name"]
@@ -867,7 +858,7 @@ class LocalKCDTransformer(DataTransformer):
             logging.debug(f'원천 데이터와 합친 후 row수: {len(matched_df)}')
 
             # 6. 필요한 컬럼 선택 및 기본값 설정
-            local_kcd = local_kcd[[self.diagcode, 'changed_diagcode', self.fromdate, self.todate, self.engname, self.korname, self.stdiagcd, self.kcdversion,
+            local_kcd = local_kcd[[self.diagcode, 'changed_diagcode', self.fromdate, self.todate, self.korname,
                                 self.concept_id, self.concept_name, self.domain_id, self.vocabulary_id, self.concept_class_id, 
                                 self.standard_concept, self.concept_code, self.valid_start_date, self.valid_end_date, self.invalid_reason]]
 
@@ -905,7 +896,6 @@ class ConditionOccurrenceTransformer(DataTransformer):
         self.condition_source_value_name = self.cdm_config["columns"]["condition_source_value_name"]
         self.condition_status_source_value = self.cdm_config["columns"]["condition_status_source_value"]
         self.patfg = self.cdm_config["columns"]["patfg"]
-        self.diagfg = self.cdm_config["columns"]["diagfg"]
         self.fromdate = self.cdm_config["columns"]["fromdate"]
         self.todate = self.cdm_config["columns"]["todate"]
         
@@ -944,7 +934,7 @@ class ConditionOccurrenceTransformer(DataTransformer):
             logging.debug(f"원천 데이터 row수: {len(source)}")
 
             # visit_source_key 생성
-            # source["visit_source_key"] = source[self.person_source_value] + source[self.condition_start_datetime].astype(str) + source[self.patfg] + source[self.meddept].apply(lambda x: '' if pd.isna(x) else x)
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.source_key]
 
             # 원천에서 조건걸기
             source[self.condition_start_datetime] = pd.to_datetime(source[self.condition_start_datetime])
@@ -965,36 +955,40 @@ class ConditionOccurrenceTransformer(DataTransformer):
             logging.debug(f"local_kcd 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
             source = pd.merge(source, local_kcd, on = self.condition_source_value, how = "left", suffixes=('', '_kcd'))
-            source[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
-            source[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
+            source[self.fromdate] = source[self.fromdate].fillna(pd.to_datetime('1900-01-01'))
+            source[self.todate] = source[self.todate].fillna(pd.to_datetime('2099-12-31'))
             source = source[(source[self.condition_start_datetime].dt.date >= source[self.fromdate]) & (source[self.condition_start_datetime].dt.date <= source[self.todate])]
             logging.debug(f"local_kcd 테이블의 날짜 조건 적용 후 원천 데이터 row수: {len(source)}")
 
             # care_site table과 병합
-            source = pd.merge(source, care_site_data, left_on=self.meddept, right_on="care_site_source_value", how="left")
+            source = pd.merge(source, care_site_data, left_on=[self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             logging.debug(f"care_site 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
             # provider table과 병합
-            source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
+            source = pd.merge(source, provider_data, left_on=[self.provider, self.hospital], right_on=["provider_source_value", self.hospital], how="left", suffixes=('', '_y'))
             logging.debug(f"provider 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
             # visit_start_datetime 형태 변경
             visit_data["visit_start_datetime"] = pd.to_datetime(visit_data["visit_start_datetime"], errors = "coerce")
+            visit_data["visit_end_datetime"] = pd.to_datetime(visit_data["visit_end_datetime"], errors = "coerce")
             
             # visit_occurrence table과 병합
-            source = pd.merge(source, visit_data, left_on=["person_id", self.visit_source_key], right_on=["person_id", "visit_source_key"], how="left", suffixes=('', '_y'))
+            source = pd.merge(source, visit_data, left_on=["visit_source_key"], right_on=["visit_source_key"], how="left", suffixes=('', '_y'))
             logging.debug(f"visit_occurrence 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
             # visit_detail table과 병합
-            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
-            visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
-            visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
-            source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
+            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_detail_source_key"]]
+            # visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
+            # visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
+            source = pd.merge(source, visit_detail, left_on=["visit_source_key"], right_on=["visit_detail_source_key"], how="left", suffixes=('', '_y'))
             logging.debug(f"visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}")
 
-            source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.condition_start_datetime] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
+            # source["visit_detail_start_datetime"] = source["visit_detail_start_datetime"].fillna(pd.to_datetime('1900-01-01'))
+            # source["visit_detail_end_datetime"] = source["visit_detail_end_datetime"].fillna(pd.to_datetime('2099-12-31'))
+            # source = source[(source[self.condition_start_datetime] >= source["visit_detail_start_datetime"]) & (source[self.condition_start_datetime] <= source["visit_detail_end_datetime"])]
+            # source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.condition_start_datetime] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
             source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
-            source = source.drop_duplicates()
+            # source = source.drop_duplicates()
             logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}")
 
             # concept_etc table과 병합
@@ -1059,7 +1053,7 @@ class ConditionOccurrenceTransformer(DataTransformer):
                 "환자구분": source[self.patfg],
                 "진료과": source[self.meddept],
                 "진료과명": source["care_site_name"],
-                "상병구분": source[self.diagfg]
+                "상병구분": None
                 })
 
             # # datetime format 형식 맞춰주기, ns로 표기하는 값이 들어갈 수 있어서 처리함
@@ -1085,17 +1079,7 @@ class LocalEDITransformer(DataTransformer):
         # 컬럼 변수 재정의      
         self.order_data = self.cdm_config["data"]["order_data"]
         self.concept_data = self.cdm_config["data"]["concept_data"]
-        self.atc_data = self.cdm_config["data"]["atc_data"]
         self.output_filename = self.cdm_config["data"]["output_filename"]
-        
-        self.ordercode = self.cdm_config["columns"]["ordercode"]
-        self.edicode = self.cdm_config["columns"]["edicode"]
-        self.fromdate = self.cdm_config["columns"]["fromdate"]
-        self.todate = self.cdm_config["columns"]["todate"]
-        self.standard_code = self.cdm_config["columns"]["standard_code"]
-        self.atccode = self.cdm_config["columns"]["atccode"]
-        self.atcname = self.cdm_config["columns"]["atcname"]
-        self.ordname = self.cdm_config["columns"]["ordname"]
 
         
     def transform(self):
@@ -1122,7 +1106,6 @@ class LocalEDITransformer(DataTransformer):
         try : 
             order_data = self.read_csv(self.order_data, path_type = self.source_flag, dtype = self.source_dtype)
             concept_data = self.read_csv(self.concept_data, path_type = self.source_flag, dtype = self.source_dtype)
-            atc_data = self.read_csv(self.atc_data, path_type = self.source_flag, dtype = self.source_dtype)
             logging.debug(f'원천 데이터 row수: order: {len(order_data)}')
 
             # 처방코드 마스터와 수가코드 매핑
@@ -1133,24 +1116,20 @@ class LocalEDITransformer(DataTransformer):
             source = pd.merge(source, concept_data, left_on=self.edicode, right_on="concept_code", how="left")
             logging.debug(f'concept merge후 데이터 row수: {len(source)}')
 
+            # 코드 사용기간 없는 경우 사용기간 임의 부여
+            source[self.fromdate] = source[self.fromdate].fillna(pd.to_datetime("1900-01-01").date())
+            source[self.todate] = source[self.todate].fillna(pd.to_datetime("2099-12-31").date())
+            
             # drug의 경우 KCD, EDI 순으로 매핑
-            source = source.sort_values(by = [self.ordercode, self.fromdate, "vocabulary_id"], ascending=[True, True, False])
-            source['Sequence'] = source.groupby([self.ordercode, self.fromdate]).cumcount() + 1
+            source = source.sort_values(by = [self.ordcode, self.fromdate, "vocabulary_id"], ascending=[True, True, False])
+            source['Sequence'] = source.groupby([self.hospital_code, self.ordcode, self.fromdate]).cumcount() + 1
             source = source[source["Sequence"] == 1]
             logging.debug(f'중복되는 concept_id 제거 후 데이터 row수: {len(source)}')
             
 
             logging.debug(f'EDI매핑 후 데이터 row수: {len(source)}')
-
-            # ATC코드 매핑
-            atc_data[self.standard_code] = atc_data[self.standard_code].str[3:-1]
-            # atc_data[self.edi_fromdate] = pd.to_datetime(atc_data[self.edi_fromdate], format='%Y%m%d')
-            # print(atc_data[self.edi_fromdate])
-            # atc_data[self.edi_todate] = pd.to_datetime(atc_data[self.edi_todate], errors="coerce")
-
-            local_edi = pd.merge(source, atc_data, left_on=self.edicode, right_on=self.standard_code, how = "left")
             # local_edi[self.edi_fromdate] = local_edi[(local_edi["FROMDATE"] >= local_edi[self.edi_fromdate]) & (local_edi["FROMDATE"] <= local_edi[self.edi_todate])]
-            
+            local_edi = source
 
             logging.debug(f'local_edi row수: {len(local_edi)}')
             logging.debug(f"요약:\n{local_edi.describe(include = 'all').T.to_string()}")
@@ -1180,21 +1159,12 @@ class DrugexposureTransformer(DataTransformer):
         self.cnt = self.cdm_config["columns"]["cnt"]
         self.route_source_value = self.cdm_config["columns"]["route_source_value"]
         self.dose_unit_source_value = self.cdm_config["columns"]["dose_unit_source_value"]
-        self.medtime = self.cdm_config["columns"]["medtime"]
-        self.dcyn = self.cdm_config["columns"]["dcyn"]
         self.patfg = self.cdm_config["columns"]["patfg"]
         self.drug_source_value_name = self.cdm_config["columns"]["drug_source_value_name"]
-        self.methodcd = self.cdm_config["columns"]["methodcd"]
-        self.age = self.cdm_config["columns"]["age"]
         self.ordseqno = self.cdm_config["columns"]["ordseqno"]
-
-        self.fromdate = self.cdm_config["columns"]["fromdate"]
-        self.todate = self.cdm_config["columns"]["todate"]
-        self.ordcode = self.cdm_config["columns"]["ordcode"]
-        self.edicode = self.cdm_config["columns"]["edicode"]
         self.atccode = self.cdm_config["columns"]["atccode"]
         self.atccodename = self.cdm_config["columns"]["atccodename"]
-        
+
 
     def transform(self):
         """
@@ -1229,34 +1199,34 @@ class DrugexposureTransformer(DataTransformer):
             concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype)
 
             person_data = person_data[["person_id", "person_source_value", "환자명"]]
-            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "care_site_name"]]
-            provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
-            visit_data = visit_data[["visit_occurrence_id", "visit_start_datetime", "care_site_id", "visit_source_value", "person_id"]]
-            visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id", "visit_detail_start_datetime", "visit_detail_end_datetime"]]
+            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "care_site_name", "place_of_service_source_value"]]
+            provider_data = provider_data[["provider_id", "provider_source_value", "provider_name", self.hospital]]
+            visit_data = visit_data[["visit_occurrence_id", "visit_start_datetime", "care_site_id", "visit_source_value", "person_id", "visit_source_key"]]
+            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_detail_source_key"]]
             logging.info(f"원천 데이터 row수:, {len(source)}")
 
             # 원천에서 조건걸기
             source[self.drug_exposure_start_datetime] = pd.to_datetime(source[self.drug_exposure_start_datetime])
             source = source[(source[self.drug_exposure_start_datetime] <= self.data_range)]
             source = source[[self.person_source_value, self.drug_source_value, self.drug_exposure_start_datetime,
-                             self.meddept, self.provider, self.patfg, self.medtime, self.days_supply,
-                             self.qty, self.cnt, self.dose_unit_source_value, self.drug_source_value_name,
-                             self.methodcd, self.age, self.ordseqno, self.dcyn]]
-            source["진료일시"] = source[self.medtime]
-            source[self.medtime] = pd.to_datetime(source[self.medtime], errors = "coerce")
-            source = source[source[self.medtime].notna()]
+                             self.meddept, self.provider, self.patfg, self.days_supply, self.qty, self.cnt,
+                             self.dose_unit_source_value, self.drug_source_value_name, self.ordseqno, 
+                             self.atccode, self.atccodename, self.hospital, self.source_key
+                             ]]
+            # visit_source_key 생성
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.source_key]
             logging.info(f"조건 적용후 원천 데이터 row수:, {len(source)}")
 
-            local_edi = local_edi[[self.ordcode, self.fromdate, self.todate, self.edicode, "concept_id", self.atccode, self.atccodename]]
+            local_edi = local_edi[[self.ordcode, self.fromdate, self.todate, self.edicode, "concept_id"]]
             local_edi[self.fromdate] = pd.to_datetime(local_edi[self.fromdate] , errors="coerce")
             # local_edi[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
             local_edi[self.todate] = pd.to_datetime(local_edi[self.todate] , errors="coerce")
             # local_edi[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
 
             # LOCAL코드와 EDI코드 매핑 테이블과 병합
-            source = pd.merge(source, local_edi, left_on=self.drug_source_value, right_on="ORDCODE", how="left")
-            source[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
-            source[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
+            source = pd.merge(source, local_edi, left_on=self.drug_source_value, right_on=self.ordcode, how="left")
+            source[self.fromdate] = source[self.fromdate].fillna(pd.Timestamp('1900-01-01'))
+            source[self.todate] = source[self.todate].fillna(pd.Timestamp('2099-12-31'))
             logging.info(f"local_edi와 병합 후 데이터 row수:, {len(source)}")
             source = source[(source[self.drug_exposure_start_datetime] >= source[self.fromdate]) & (source[self.drug_exposure_start_datetime] <= source[self.todate])]
             logging.info(f"local_edi날짜 조건 적용 후 데이터 row수: {len(source)}")
@@ -1266,31 +1236,32 @@ class DrugexposureTransformer(DataTransformer):
             logging.info(f"person 테이블과 결합 후 데이터 row수: {len(source)}")
 
             # care_site table과 병합
-            source = pd.merge(source, care_site_data, left_on=self.meddept, right_on="care_site_source_value", how="left")
+            source = pd.merge(source, care_site_data, left_on=[self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             logging.info(f"care_site 테이블과 결합 후 데이터 row수: {len(source)}")
 
             # provider table과 병합
-            source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
+            source = pd.merge(source, provider_data, left_on=[self.provider, self.hospital], right_on=["provider_source_value", self.hospital], how="left", suffixes=('', '_y'))
             logging.info(f"provider 테이블과 결합 후 데이터 row수: {len(source)}")
 
             # visit_start_datetime 형태 변경
             visit_data["visit_start_datetime"] = pd.to_datetime(visit_data["visit_start_datetime"])
-            # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
+            
             # visit_occurrence table과 병합
-            source = pd.merge(source, visit_data, left_on=["person_id", self.visit_source_key], right_on=["person_id", "visit_source_key"], how="left", suffixes=('', '_y'))
+            source = pd.merge(source, visit_data, left_on=["visit_source_key"], right_on=["visit_source_key"], how="left", suffixes=('', '_y'))
             logging.info(f"visit_occurrence 테이블과 결합 후 데이터 row수: {len(source)}")
 
             # visit_detail table과 병합
-            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
-            visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
-            visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
-            source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
+            # visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
+            # visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
+            source = pd.merge(source, visit_detail, left_on=["visit_source_key"], right_on=["visit_detail_source_key"], how="left", suffixes=('', '_y'))
             logging.debug(f"visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}")
             
-            source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.drug_exposure_start_datetime] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
+            # source["visit_detail_start_datetime"] = source["visit_detail_start_datetime"].fillna(pd.to_datetime('1900-01-01'))
+            # source["visit_detail_end_datetime"] = source["visit_detail_end_datetime"].fillna(pd.to_datetime('2099-12-31'))
+            # source = source[(source[self.drug_exposure_start_datetime] >= source["visit_detail_start_datetime"]) & (source[self.drug_exposure_start_datetime] <= source["visit_detail_end_datetime"])]
+            # source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.drug_exposure_start_datetime] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
             source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
-            source = source.drop_duplicates(subset=["person_id", self.drug_exposure_start_datetime, self.patfg, self.drug_source_value, self.medtime, self.ordseqno, self.meddept])
+            # source = source.drop_duplicates(subset=["person_id", self.drug_exposure_start_datetime, self.patfg, self.drug_source_value, self.medtime, self.ordseqno, self.meddept])
             logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}")
 
             # # care_site_id가 없는 경우 0으로 값 입력
@@ -1354,13 +1325,13 @@ class DrugexposureTransformer(DataTransformer):
             "환자구분": source[self.patfg],
             "진료과": source[self.meddept],
             "진료과명": source["care_site_name"],
-            "진료일시": source["진료일시"],
-            "나이": source[self.age],
+            "진료일시": None,
+            "나이": None,
             "투여량": source[self.qty],
             "함량단위": source[self.dose_unit_source_value],
             "횟수": source[self.cnt],
             "일수": source[self.days_supply],
-            "용법코드": source[self.methodcd],
+            "용법코드": None,
             "처방순번": source[self.ordseqno],
             "ATC코드": source[self.atccode],
             "ATC 코드명": source[self.atccodename]
@@ -1376,10 +1347,10 @@ class DrugexposureTransformer(DataTransformer):
         except Exception as e :
             logging.error(f"{self.table} 테이블 CDM 데이터 변환 중 오류: {e}", exc_info = True)
 
-class MeasurementStexmrstTransformer(DataTransformer):
+class MeasurementTransformer(DataTransformer):
     def __init__(self, config_path):
         super().__init__(config_path)
-        self.table = "measurement_stexmrst"
+        self.table = "measurement"
         self.cdm_config = self.config[self.table]
 
         # 컬럼 변수 재정의   
@@ -1394,23 +1365,11 @@ class MeasurementStexmrstTransformer(DataTransformer):
         self.value_source_value = self.cdm_config["columns"]["value_source_value"]
         self.unit_source_value = self.cdm_config["columns"]["unit_source_value"]
         self.result_range = self.cdm_config["columns"]["result_range"]
-        self.range_low = self.cdm_config["columns"]["range_low"]
-        self.range_high = self.cdm_config["columns"]["range_high"]
         self.patfg = self.cdm_config["columns"]["patfg"]
-        self.medtime = self.cdm_config["columns"]["medtime"]
         self.ordseqno = self.cdm_config["columns"]["ordseqno"]
-        self.age = self.cdm_config["columns"]["age"]
-        self.처방코드 = self.cdm_config["columns"]["처방코드"]
         self.처방명 = self.cdm_config["columns"]["처방명"]
-        self.결과내역 = self.cdm_config["columns"]["결과내역"]
         self.acptdt = self.cdm_config["columns"]["acptdt"]
-        self.readdt = self.cdm_config["columns"]["readdt"]
         self.reptdt = self.cdm_config["columns"]["reptdt"]
-
-        self.fromdate = self.cdm_config["columns"]["fromdate"]
-        self.todate = self.cdm_config["columns"]["todate"]
-        self.ordcode = self.cdm_config["columns"]["ordcode"]
-        self.ordname = self.cdm_config["columns"]["ordname"]
         
     def transform(self):
         """
@@ -1449,17 +1408,20 @@ class MeasurementStexmrstTransformer(DataTransformer):
 
             # 원천에서 조건걸기
             source = source[source[self.measurement_date] <= self.data_range]
-            source = source[[self.person_source_value, self.measurement_date, self.measurement_source_value, self.value_source_value, self.unit_source_value, self.result_range, self.visit_source_key]]
+            source = source[[self.source_key, self.hospital, self.person_source_value, self.measurement_date,
+                            self.measurement_source_value, self.value_source_value, self.unit_source_value,
+                            self.result_range, self.meddept, self.provider, self.orddate, self.patfg, 
+                            self.ordseqno, self.처방명, self.acptdt, self.exectime, self.reptdt
+                            ]]
             source[self.measurement_date] = pd.to_datetime(source[self.measurement_date])
             source = source[source[self.measurement_date] <= self.data_range]
             
             # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
-            source[self.orddate] = pd.to_datetime(source[self.orddate], format="%Y%m%d")
-            source[self.exectime] = pd.to_datetime(source[self.exectime], errors = "coerce")
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.source_key]
            
             # value_as_number float형태로 저장되게 값 변경
-            source["value_as_number"] = source[self.value_source_value].str.extract('(-?\d+\.\d+|\d+)')
+            # source["value_as_number"] = source[self.value_source_value].str.extract('(-?\d+\.\d+|\d+)')
+            source["value_as_number"] = source[self.value_source_value].apply(convert_to_numeric)
             source["value_as_number"] = source["value_as_number"].astype(float)
             # source[self.range_low] = source[self.range_low].str.extract('(-?\d+\.\d+|\d+)')
             # source[self.range_high] = source[self.range_high].str.extract('(-?\d+\.\d+|\d+)')
@@ -1477,52 +1439,45 @@ class MeasurementStexmrstTransformer(DataTransformer):
             logging.debug(f'person 테이블과 결합 후 데이터 row수: {len(source)}')
 
             # local_edi 전처리
-            local_edi = local_edi[[self.ordcode, self.fromdate, self.todate, self.edicode, "concept_id", self.ordname, "병원구분코드"]]
+            local_edi = local_edi[[self.ordcode, self.fromdate, self.todate, self.edicode, "concept_id", self.ordname, self.hospital_code]]
             local_edi[self.fromdate] = pd.to_datetime(local_edi[self.fromdate], errors="coerce")
             # local_edi[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
             local_edi[self.todate] = pd.to_datetime(local_edi[self.todate], errors="coerce")
             # local_edi[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
             
             # LOCAL코드와 EDI코드 매핑 테이블과 병합
-            source = pd.merge(source, local_edi, left_on=self.measurement_source_value, right_on=self.ordcode, how="left", suffixes=["", "_local_edi"])
+            source = pd.merge(source, local_edi, left_on=[self.measurement_source_value, self.hospital], right_on=[self.ordcode, self.hospital_code], how="left", suffixes=["", "_local_edi"])
             del local_edi
-            source[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
-            source[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
+            source[self.fromdate] = source[self.fromdate].fillna(pd.to_datetime('1900-01-01').date())
+            source[self.todate] = source[self.todate].fillna(pd.to_datetime('2099-12-31').date())
             logging.debug(f'EDI코드 테이블과 병합 후 데이터 row수: {len(source)}')
             source = source[(source[self.orddate] >= source[self.fromdate]) & (source[self.orddate] <= source[self.todate])]
             logging.debug(f"EDI코드 사용기간별 필터 적용 후 데이터 row수: {len(source)}")
 
             # care_site table과 병합
-            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "care_site_name"]]
-            source = pd.merge(source, care_site_data, left_on=self.meddept, right_on="care_site_source_value", how="left")
+            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "care_site_name", "place_of_service_source_value"]]
+            source = pd.merge(source, care_site_data, left_on=[self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             del care_site_data
             logging.debug(f'care_site 테이블과 결합 후 데이터 row수: {len(source)}')
 
             # provider table과 병합
-            provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
-            source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
+            provider_data = provider_data[["provider_id", "provider_source_value", "provider_name", self.hospital]]
+            source = pd.merge(source, provider_data, left_on=[self.provider, self.hospital], right_on=["provider_source_value", self.hospital], how="left", suffixes=('', '_y'))
             logging.debug(f'provider 테이블과 결합 후 데이터 row수: {len(source)}')
 
             # visit_start_datetime 형태 변경
             visit_data["visit_start_datetime"] = pd.to_datetime(visit_data["visit_start_datetime"])
 
             # visit_occurrence table과 병합
-            visit_data = visit_data[["visit_occurrence_id", "visit_start_datetime", "care_site_id", "visit_source_value", "person_id"]]
-            source = pd.merge(source, visit_data, left_on=["person_id", "care_site_id", self.patfg, self.medtime], right_on=["person_id", "care_site_id", "visit_source_value", "visit_start_datetime"], how="left", suffixes=('', '_y'))
+            visit_data = visit_data[["visit_occurrence_id", "visit_start_datetime", "care_site_id", "visit_source_value", "person_id", "visit_source_key"]]
+            source = pd.merge(source, visit_data, left_on=["visit_source_key"], right_on=["visit_source_key"], how="left", suffixes=('', '_y'))
             del visit_data
             logging.debug(f'visit_occurrence 테이블과 결합 후 데이터 row수: {len(source)}')
 
             # visit_detail table과 병합
-            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
-            visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
-            visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
-            source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
+            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_detail_source_key"]]
+            source = pd.merge(source, visit_detail, left_on=["visit_source_key"], right_on=["visit_detail_source_key"], how="left", suffixes=('', '_y'))
             logging.debug(f"visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}")
-            
-            source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.orddate] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
-            source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
-            source = source.drop_duplicates(subset=["person_id", self.orddate, self.patfg, self.measurement_source_value, self.medtime, self.ordseqno, self.meddept])
-            logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}")
 
             ### unit매핑 작업 ###
             # concept_unit과 병합
@@ -1605,11 +1560,6 @@ class MeasurementStexmrstTransformer(DataTransformer):
         변환된 데이터는 새로운 DataFrame으로 구성됩니다.
         """
         try : 
-            measurement_date_condition = [source[self.exectime].notna()]
-            measurement_date_value = [source[self.exectime].dt.date]
-            measurement_datetime_value = [source[self.exectime]]
-            measurement_time_value = [source[self.exectime].dt.time]
-
             unit_id_condition = [
                 source["concept_id_unit"].notna(),
                 source["concept_id_synonym"].notna()
@@ -1635,9 +1585,9 @@ class MeasurementStexmrstTransformer(DataTransformer):
                 "person_id": source["person_id"],
                 "환자명": source["환자명"],
                 "measurement_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]),
-                "measurement_date": np.select(measurement_date_condition, measurement_date_value, default=source[self.orddate].dt.date),
-                "measurement_datetime": np.select(measurement_date_condition, measurement_datetime_value, default=source[self.orddate]),
-                "measurement_time": np.select(measurement_date_condition, measurement_time_value, default=source[self.orddate].dt.time),
+                "measurement_date": source[self.measurement_date].dt.date,
+                "measurement_datetime": source[self.measurement_date],
+                "measurement_time": source[self.measurement_date].dt.time,
                 # "measurement_date_type": np.select(measurement_date_condition, ["검사일"], default="처방일"),
                 "measurement_type_concept_id": source["measurement_type_concept_id"],
                 "measurement_type_concept_id_name": source["concept_name_measurement_type"],
@@ -1648,36 +1598,36 @@ class MeasurementStexmrstTransformer(DataTransformer):
                 "value_as_concept_id_name": np.select([source["concept_name_value_as_concept"].notna()], [source["concept_name_value_as_concept"]], default=self.no_matching_concept[1]) ,
                 "unit_concept_id": np.select(unit_id_condition, unit_id_value, default=self.no_matching_concept[0]),
                 "unit_concept_id_name": np.select(unit_name_condition, unit_name_value, default=self.no_matching_concept[1]),
-                "range_low": source[self.range_low],
-                "range_high": source[self.range_high],
+                "range_low": source["range_low"],
+                "range_high": source["range_high"],
                 "provider_id": source["provider_id"],
                 "처방의명": source["provider_name"],
                 "visit_occurrence_id": source["visit_occurrence_id"],
                 "visit_detail_id": source["visit_detail_id"],
                 "measurement_source_value": source[self.measurement_source_value],
-                "measurement_source_value_name": source[self.ordname+"_local_edi"],
+                "measurement_source_value_name": source[self.ordname],
                 "EDI코드": source[self.edicode],
                 "measurement_source_concept_id": source["concept_id"],
                 "unit_source_value": source[self.unit_source_value],
                 "value_source_value": source[self.value_source_value],
                 "vocabulary_id": "EDI",
                 "visit_source_key": source["visit_source_key"],
-                "처방코드": source[self.처방코드],
+                "처방코드": source[self.measurement_source_value],
                 "처방명": source[self.처방명],
                 "환자구분": source[self.patfg],
                 "진료과": source[self.meddept],
                 "진료과명": source["care_site_name"],
                 "처방일": source[self.orddate],
-                "진료일시": source["진료일시"],
+                "진료일시": None,
                 "접수일시": source[self.acptdt],
                 "실시일시": source[self.exectime],
-                "판독일시": source[self.readdt],
+                "판독일시": source[self.reptdt],
                 "보고일시": source[self.reptdt],
                 "처방순번": source[self.ordseqno],
-                "정상치(상)": source[self.range_high],
-                "정상치(하)": source[self.range_low],
+                "정상치(상)": source[self.result_range],
+                "정상치(하)": source[self.result_range],
                 # "나이": source[self.age],
-                "결과내역": source[self.결과내역]
+                "결과내역": source[self.value_source_value]
                 })
 
             logging.debug(f'CDM 데이터 row수: {len(cdm)}')
@@ -1688,705 +1638,6 @@ class MeasurementStexmrstTransformer(DataTransformer):
 
         except Exception as e :
             logging.error(f"{self.table} 테이블 CDM 데이터 변환 중 오류:\n {e}", exc_info = True)
-
-class MeasurementVSTransformer(DataTransformer):
-    def __init__(self, config_path):
-        super().__init__(config_path)
-        self.table = "measurement_vs"
-        self.cdm_config = self.config[self.table]
-
-        self.source_data = self.cdm_config["data"]["source_data"]
-        self.output_filename = self.cdm_config["data"]["output_filename"]
-        self.meddept = self.cdm_config["columns"]["meddept"]
-        self.measurement_datetime = self.cdm_config["columns"]["measurement_datetime"]
-        self.admtime = self.cdm_config["columns"]["admtime"]
-        self.patfg = self.cdm_config["columns"]["patfg"]
-        self.height = self.cdm_config["columns"]["height"]
-        self.weight = self.cdm_config["columns"]["weight"]
-        self.bmi = self.cdm_config["columns"]["bmi"]
-        self.sbp = self.cdm_config["columns"]["sbp"]
-        self.dbp = self.cdm_config["columns"]["dbp"]
-        self.pr = self.cdm_config["columns"]["pr"]
-        self.rr = self.cdm_config["columns"]["rr"]
-        self.bt = self.cdm_config["columns"]["bt"]
-        self.spo2 = self.cdm_config["columns"]["spo2"]
-
-    def transform(self):
-        """
-        소스 데이터를 읽어들여 CDM 형식으로 변환하고 결과를 CSV 파일로 저장하는 메소드입니다.
-        """
-        try :
-            source_data = self.process_source()
-            transformed_data = self.transform_cdm(source_data)
-
-            # save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
-
-            logging.info(f"{self.table} 테이블 변환 완료")
-            logging.info(f"============================")
-
-        except Exception as e :
-            logging.error(f"{self.table} 테이블 변환 중 오류:\n {e}", exc_info=True)
-            raise
-
-    def process_source(self):
-        """
-        소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
-        """
-        try:
-            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
-            person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            visit_detail = self.read_csv(self.visit_detail, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype)
-            logging.debug(f'원천 데이터 row수: {len(source)}')
-
-            # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.admtime].astype(str) + source[self.patfg] + source[self.meddept].apply(lambda x : '' if pd.isna(x) else x)
-
-            # 원천에서 조건걸기
-            source["진료일시"] = source[self.admtime]
-            source[self.admtime] = source[self.admtime].apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
-            source[self.admtime] = pd.to_datetime(source[self.admtime], errors = "coerce")
-            source[self.measurement_datetime] = source[self.measurement_datetime].apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
-            source[self.measurement_datetime] = pd.to_datetime(source[self.measurement_datetime], errors = "coerce")
-            source = source[(source[self.admtime] <= pd.to_datetime(self.data_range))]
-            logging.debug(f'조건 적용후 원천 데이터 row수: {len(source)}')
-
-            source[self.weight] = source[self.weight].astype(float)
-            source[self.height] = source[self.height].astype(float)
-            source[self.bmi] = source[self.bmi].astype(float)
-            source[self.sbp] = source[self.sbp].astype(float)
-            source[self.dbp] = source[self.dbp].astype(float)
-            source[self.pr] = source[self.pr].astype(float)
-            source[self.rr] = source[self.rr].astype(float)
-            source[self.bt] = source[self.bt].astype(float)
-            source[self.spo2] = source[self.spo2].astype(float)
-            source['calc_bmi'] = round(source[self.weight].astype(float) / (source[self.height].astype(float)*0.01)**2, 1)
-
-            # CDM 데이터 컬럼 줄이기
-            person_data = person_data[["person_id", "person_source_value", "환자명"]]
-            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "care_site_name"]]
-            provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
-            visit_data = visit_data[["visit_occurrence_id", "visit_start_datetime", "care_site_id", "visit_source_value", "person_id"]]
-            visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id", "visit_detail_start_datetime", "visit_detail_end_datetime"]]
-
-            # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
-            logging.debug(f'person 테이블과 결합 후 원천 데이터 row수: {len(source)}')
-
-            # care_site table과 병합
-            source = pd.merge(source, care_site_data, left_on=self.meddept, right_on="care_site_source_value", how="left")
-            logging.debug(f'care_site 테이블과 결합 후 원천 데이터 row수: {len(source)}')
-
-            # visit_start_datetime 형태 변경
-            visit_data["visit_start_datetime"] = pd.to_datetime(visit_data["visit_start_datetime"])
-
-            # visit_occurrence table과 병합
-            visit_data["visit_start_datetime"] = pd.to_datetime(visit_data["visit_start_datetime"])
-            source = pd.merge(source, visit_data, left_on=["person_id", "care_site_id", self.admtime, self.patfg], right_on=["person_id", "care_site_id", "visit_start_datetime", "visit_source_value"], how="left", suffixes=('', '_y'))
-            logging.debug(f'visit_occurrence 테이블과 결합 후 원천 데이터 row수: {len(source)}')
-
-            # visit_detail table과 병합
-            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
-            visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
-            visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
-            source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
-            logging.debug(f"visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}")
-            
-            source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.measurement_datetime] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
-            source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
-            source = source.drop_duplicates(subset=["person_id", self.admtime, self.patfg, self.measurement_datetime, self.meddept])
-            logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}")
-            
-            ### concept_etc테이블과 병합 ###
-            concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)            
-
-            # type_concept_id 만들고 type_concept_id_name 기반 만들기
-            source["measurement_type_concept_id"] = 44818702
-            source = pd.merge(source, concept_etc, left_on = "measurement_type_concept_id", right_on="concept_id", how="left", suffixes=('', '_measurement_type'))
-            logging.debug(f'concept_etc: type_concept_id 테이블과 결합 후 데이터 row수: {len(source)}')
-
-            source = source.drop_duplicates()
-            logging.debug(f"중복제거 후 데이터 row수: {len(source)}")
-
-            # 값이 없는 경우 0으로 값 입력
-            # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
-
-            logging.debug(f'CDM 테이블과 결합 후 원천 데이터 row수: {len(source)}')
-
-            return source
-
-        except Exception as e :
-            logging.error(f"{self.table} 테이블 소스 데이터 처리 중 오류: {e}", exc_info = True)
-
-    def transform_cdm(self, source):
-        """
-        주어진 소스 데이터를 CDM 형식에 맞게 변환하는 메소드.
-        변환된 데이터는 새로운 DataFrame으로 구성됩니다.
-        """
-        try : 
-            measurement_concept = {
-                self.height: [4177340, "body height", 8582, "cm"],
-                self.weight: [4099154, "body weight", 9529, "kg"],
-                self.bmi: [40490382, "BMI", 9531, "kilogram per square meter"],
-                self.sbp: [4152194, "systolic blood pressure (SBP)", 4118323, "mmHg"],
-                self.dbp: [4154790, "diastolic blood pressure (DBP)", 4118323, "mmHg"],
-                self.pr: [4224504, "pulse rate (PR)", 4118124, "beats/min"],
-                self.rr: [4313591, "respiratory rate(RR)", 8541, "respiratory rate(RR)"],
-                self.bt: [4302666, "body temperature", 586323, "degree Celsius"],
-                self.spo2: [4020553, "SPO2", 8554, "%"]
-            }
-            source_weight = source[source[self.weight]>0]
-            source_height = source[source[self.height]>0]
-            source_bmi = source[source[self.bmi] > 0]
-
-            source_dbp = source[source[self.dbp] > 0]
-            source_sbp = source[source[self.sbp] > 0]
-            source_pr = source[source[self.pr] > 0]
-            source_bt = source[source[self.bt] > 0]
-            source_rr = source[source[self.rr] > 0]
-            source_spo2 = source[source[self.spo2] > 0]
-            logging.debug(f"""값이 0보다 큰 원천 데이터 row수: 
-                          weight: {len(source_weight)},
-                          height: {len(source_height)},
-                          bmi: {len(source_bmi)},
-                          sbp: {len(source_sbp)},
-                          dbp: {len(source_dbp)},
-                          pr: {len(source_pr)},
-                          bt: {len(source_bt)},
-                          rr: {len(source_rr)},
-                          spo2: {len(source_spo2)}
-                        """)
-
-            # weight값이 저장된 cdm_bmi생성
-            cdm_weight = pd.DataFrame({
-                "measurement_id": source_weight.index + 1,
-                "person_id": source_weight["person_id"],
-                "환자명": source_weight["환자명"],
-                "measurement_concept_id": measurement_concept[self.weight][0],
-                "measurement_date": source_weight[self.measurement_datetime].dt.date,
-                "measurement_datetime": source_weight[self.measurement_datetime],
-                "measurement_time": source_weight[self.measurement_datetime].dt.time,
-                # "measurement_date_type": None,
-                "measurement_type_concept_id": 44818702,
-                "measurement_type_concept_id_name": source_weight["concept_name"],
-                "operator_concept_id": self.no_matching_concept[0],
-                "operator_concept_id_name": self.no_matching_concept[1],
-                "value_as_number": source_weight[self.weight],
-                "value_as_concept_id": self.no_matching_concept[0],
-                "value_as_concept_id_name": self.no_matching_concept[1],
-                "unit_concept_id": measurement_concept[self.weight][2],
-                "unit_concept_id_name": measurement_concept[self.weight][3],
-                "range_low": None,
-                "range_high": None,
-                "provider_id": None,
-                "처방의명": None,
-                "visit_occurrence_id": source_weight["visit_occurrence_id"],
-                "visit_detail_id": source_weight["visit_detail_id"],
-                "measurement_source_value": measurement_concept[self.weight][1],
-                "measurement_source_value_name": measurement_concept[self.weight][1],
-                "EDI코드": None,
-                "measurement_source_concept_id": measurement_concept[self.weight][0],
-                "unit_source_value": measurement_concept[self.weight][3] ,
-                "value_source_value": source_weight[self.weight],
-                "vocabulary_id": "SNOMED",
-                "visit_source_key": source_weight["visit_source_key"],
-                "처방코드": None,
-                "처방명": None,
-                "환자구분": source_weight[self.patfg],
-                "진료과": source_weight[self.meddept],
-                "진료과명": source_weight["care_site_name"],
-                "처방일": None,
-                "진료일시": source_weight["진료일시"],
-                "접수일시": None,
-                "실시일시": None,
-                "판독일시": None,
-                "보고일시": None,
-                "처방순번": None,
-                "정상치(상)": None,
-                "정상치(하)": None,
-                # "나이": None,
-                "결과내역": source_weight[self.weight]              
-                })
-
-            # height값이 저장된 cdm_bmi생성
-            cdm_height = pd.DataFrame({
-                "measurement_id": source_height.index + 1,
-                "person_id": source_height["person_id"],
-                "환자명": source_height["환자명"],
-                "measurement_concept_id": measurement_concept[self.height][0],
-                "measurement_date": source_height[self.measurement_datetime].dt.date,
-                "measurement_datetime": source_height[self.measurement_datetime],
-                "measurement_time": source_height[self.measurement_datetime].dt.time, 
-                # "measurement_date_type": None,
-                "measurement_type_concept_id": 44818702,
-                "measurement_type_concept_id_name": source_height["concept_name"],
-                "operator_concept_id": self.no_matching_concept[0],
-                "operator_concept_id_name": self.no_matching_concept[1],
-                "value_as_number": source_height[self.height],
-                "value_as_concept_id": self.no_matching_concept[0],
-                "value_as_concept_id_name": self.no_matching_concept[1],
-                "unit_concept_id": measurement_concept[self.height][2],
-                "unit_concept_id_name": measurement_concept[self.height][3],
-                "range_low": None,
-                "range_high": None,
-                "provider_id": None,
-                "처방의명": None,
-                "visit_occurrence_id": source_height["visit_occurrence_id"],
-                "visit_detail_id": source_height["visit_detail_id"],
-                "measurement_source_value": measurement_concept[self.height][1],
-                "measurement_source_value_name": measurement_concept[self.height][1],
-                "EDI코드": None,
-                "measurement_source_concept_id": measurement_concept[self.height][0],
-                "unit_source_value": measurement_concept[self.height][3],
-                "value_source_value": source_height[self.height],
-                "vocabulary_id": "SNOMED",
-                "visit_source_key": source_height["visit_source_key"],
-                "처방코드": None,
-                "처방명": None,
-                "환자구분": source_height[self.patfg],
-                "진료과": source_height[self.meddept],
-                "진료과명": source_height["care_site_name"],
-                "처방일": None,
-                "진료일시": source_height["진료일시"],
-                "접수일시": None,
-                "실시일시": None,
-                "판독일시": None,
-                "보고일시": None,
-                "처방순번": None,
-                "정상치(상)": None,
-                "정상치(하)": None,
-                # "나이": None,
-                "결과내역": source_height[self.height]  
-                })
-
-            # bmi값이 저장된 cdm_bmi생성
-            cdm_bmi = pd.DataFrame({
-                "measurement_id": source_bmi.index + 1,
-                "person_id": source_bmi["person_id"],
-                "환자명": source_bmi["환자명"],
-                "measurement_concept_id": measurement_concept[self.bmi][0],
-                "measurement_date": source_bmi[self.measurement_datetime].dt.date,
-                "measurement_datetime": source_bmi[self.measurement_datetime],
-                "measurement_time": source_bmi[self.measurement_datetime].dt.time, 
-                # "measurement_date_type": None ,
-                "measurement_type_concept_id": 44818702,
-                "measurement_type_concept_id_name": source_bmi["concept_name"],
-                "operator_concept_id": self.no_matching_concept[0],
-                "operator_concept_id_name": self.no_matching_concept[1],
-                "value_as_number": source_bmi[self.bmi],
-                "value_as_concept_id": self.no_matching_concept[0],
-                "value_as_concept_id_name": self.no_matching_concept[1],
-                "unit_concept_id": measurement_concept[self.bmi][2],
-                "unit_concept_id_name": measurement_concept[self.bmi][3],
-                "range_low": None,
-                "range_high": None,
-                "provider_id": None,
-                "처방의명": None,
-                "visit_occurrence_id": source_bmi["visit_occurrence_id"],
-                "visit_detail_id": source_bmi["visit_detail_id"],
-                "measurement_source_value": measurement_concept[self.bmi][1],
-                "measurement_source_value_name": measurement_concept[self.bmi][1],
-                "EDI코드": None,
-                "measurement_source_concept_id": measurement_concept[self.bmi][0],
-                "unit_source_value": measurement_concept[self.bmi][3],
-                "value_source_value": source_bmi[self.bmi],
-                "vocabulary_id": "SNOMED",
-                "visit_source_key": source_bmi["visit_source_key"],
-                "처방코드": None,
-                "처방명": None,
-                "환자구분": source_bmi[self.patfg],
-                "진료과": source_bmi[self.meddept],
-                "진료과명": source_bmi["care_site_name"],
-                "처방일": None,
-                "진료일시": source_bmi["진료일시"],
-                "접수일시": None,
-                "실시일시": None,
-                "판독일시": None,
-                "보고일시": None,
-                "처방순번": None,
-                "정상치(상)": None,
-                "정상치(하)": None,
-                # "나이": None,
-                "결과내역": source_bmi[self.bmi]  
-                })
-
-            cdm_sbp = pd.DataFrame({
-                "measurement_id": source_sbp.index + 1,
-                "person_id": source_sbp["person_id"],
-                "환자명": source_sbp["환자명"],
-                "measurement_concept_id": measurement_concept[self.sbp][0],
-                "measurement_date": source_sbp[self.measurement_datetime].dt.date,
-                "measurement_datetime": source_sbp[self.measurement_datetime],
-                "measurement_time": source_sbp[self.measurement_datetime].dt.time, 
-                # "measurement_date_type": None ,
-                "measurement_type_concept_id": 44818702,
-                "measurement_type_concept_id_name": source_sbp["concept_name"],
-                "operator_concept_id": self.no_matching_concept[0],
-                "operator_concept_id_name": self.no_matching_concept[1],
-                "value_as_number": source_sbp[self.sbp],
-                "value_as_concept_id": self.no_matching_concept[0],
-                "value_as_concept_id_name": self.no_matching_concept[1],
-                "unit_concept_id": measurement_concept[self.sbp][2],
-                "unit_concept_id_name": measurement_concept[self.sbp][3],
-                "range_low": None,
-                "range_high": None,
-                "provider_id": None,
-                "처방의명": None,
-                "visit_occurrence_id": source_sbp["visit_occurrence_id"],
-                "visit_detail_id": source_sbp["visit_detail_id"],
-                "measurement_source_value": measurement_concept[self.sbp][1],
-                "measurement_source_value_name": measurement_concept[self.sbp][1],
-                "EDI코드": None,
-                "measurement_source_concept_id": measurement_concept[self.sbp][0],
-                "unit_source_value": measurement_concept[self.sbp][3],
-                "value_source_value": source_sbp[self.sbp],
-                "vocabulary_id": "SNOMED",
-                "visit_source_key": source_sbp["visit_source_key"],
-                "처방코드": None,
-                "처방명": None,
-                "환자구분": source_sbp[self.patfg],
-                "진료과": source_sbp[self.meddept],
-                "진료과명": source_sbp["care_site_name"],
-                "처방일": None,
-                "진료일시": source_sbp["진료일시"],
-                "접수일시": None,
-                "실시일시": None,
-                "판독일시": None,
-                "보고일시": None,
-                "처방순번": None,
-                "정상치(상)": None,
-                "정상치(하)": None,
-                # "나이": None,
-                "결과내역": source_sbp[self.sbp]  
-                })
-
-            cdm_dbp = pd.DataFrame({
-                "measurement_id": source_dbp.index + 1,
-                "person_id": source_dbp["person_id"],
-                "환자명": source_dbp["환자명"],
-                "measurement_concept_id": measurement_concept[self.dbp][0],
-                "measurement_date": source_dbp[self.measurement_datetime].dt.date,
-                "measurement_datetime": source_dbp[self.measurement_datetime],
-                "measurement_time": source_dbp[self.measurement_datetime].dt.time, 
-                # "measurement_date_type": None,
-                "measurement_type_concept_id": 44818702,
-                "measurement_type_concept_id_name": source_dbp["concept_name"],
-                "operator_concept_id": self.no_matching_concept[0],
-                "operator_concept_id_name": self.no_matching_concept[1],
-                "value_as_number": source_dbp[self.dbp],
-                "value_as_concept_id": self.no_matching_concept[0],
-                "value_as_concept_id_name": self.no_matching_concept[1],
-                "unit_concept_id": measurement_concept[self.dbp][2],
-                "unit_concept_id_name": measurement_concept[self.dbp][3],
-                "range_low": None,
-                "range_high": None,
-                "provider_id": None,
-                "처방의명": None,
-                "visit_occurrence_id": source_dbp["visit_occurrence_id"],
-                "visit_detail_id": source_dbp["visit_detail_id"],
-                "measurement_source_value": measurement_concept[self.dbp][1],
-                "measurement_source_value_name": measurement_concept[self.dbp][1],
-                "EDI코드": None,
-                "measurement_source_concept_id": measurement_concept[self.dbp][0],
-                "unit_source_value": measurement_concept[self.dbp][3],
-                "value_source_value": source_dbp[self.dbp],
-                "vocabulary_id": "SNOMED",
-                "visit_source_key": source_dbp["visit_source_key"],
-                "처방코드": None,
-                "처방명": None,
-                "환자구분": source_dbp[self.patfg],
-                "진료과": source_dbp[self.meddept],
-                "진료과명": source_dbp["care_site_name"],
-                "처방일": None,
-                "진료일시": source_dbp["진료일시"],
-                "접수일시": None,
-                "실시일시": None,
-                "판독일시": None,
-                "보고일시": None,
-                "처방순번": None,
-                "정상치(상)": None,
-                "정상치(하)": None,
-                # "나이": None,
-                "결과내역": source_dbp[self.dbp]  
-                })
-            
-            cdm_pr = pd.DataFrame({
-                "measurement_id": source_pr.index + 1,
-                "person_id": source_pr["person_id"],
-                "환자명": source_pr["환자명"],
-                "measurement_concept_id": measurement_concept[self.pr][0],
-                "measurement_date": source_pr[self.measurement_datetime].dt.date,
-                "measurement_datetime": source_pr[self.measurement_datetime],
-                "measurement_time": source_pr[self.measurement_datetime].dt.time, 
-                # "measurement_date_type": None ,
-                "measurement_type_concept_id": 44818702,
-                "measurement_type_concept_id_name": source_pr["concept_name"],
-                "operator_concept_id": self.no_matching_concept[0],
-                "operator_concept_id_name": self.no_matching_concept[1],
-                "value_as_number": source_pr[self.pr],
-                "value_as_concept_id": self.no_matching_concept[0],
-                "value_as_concept_id_name": self.no_matching_concept[1],
-                "unit_concept_id": measurement_concept[self.pr][2],
-                "unit_concept_id_name": measurement_concept[self.pr][3],
-                "range_low": None,
-                "range_high": None,
-                "provider_id": None,
-                "처방의명": None,
-                "visit_occurrence_id": source_pr["visit_occurrence_id"],
-                "visit_detail_id": source_pr["visit_detail_id"],
-                "measurement_source_value": measurement_concept[self.pr][1],
-                "measurement_source_value_name": measurement_concept[self.pr][1],
-                "EDI코드": None,
-                "measurement_source_concept_id": measurement_concept[self.pr][0],
-                "unit_source_value": measurement_concept[self.pr][3],
-                "value_source_value": source_pr[self.pr],
-                "vocabulary_id": "SNOMED",
-                "visit_source_key": source_pr["visit_source_key"],
-                "처방코드": None,
-                "처방명": None,
-                "환자구분": source_pr[self.patfg],
-                "진료과": source_pr[self.meddept],
-                "진료과명": source_pr["care_site_name"],
-                "처방일": None,
-                "진료일시": source_pr["진료일시"],
-                "접수일시": None,
-                "실시일시": None,
-                "판독일시": None,
-                "보고일시": None,
-                "처방순번": None,
-                "정상치(상)": None,
-                "정상치(하)": None,
-                # "나이": None,
-                "결과내역": source_pr[self.pr]  
-                })
-            
-            cdm_bt = pd.DataFrame({
-                "measurement_id": source_bt.index + 1,
-                "person_id": source_bt["person_id"],
-                "환자명": source_bt["환자명"],
-                "measurement_concept_id": measurement_concept[self.bt][0],
-                "measurement_date": source_bt[self.measurement_datetime].dt.date,
-                "measurement_datetime": source_bt[self.measurement_datetime],
-                "measurement_time": source_bt[self.measurement_datetime].dt.time, 
-                # "measurement_date_type": None,
-                "measurement_type_concept_id": 44818702,
-                "measurement_type_concept_id_name": source_bt["concept_name"],
-                "operator_concept_id": self.no_matching_concept[0],
-                "operator_concept_id_name": self.no_matching_concept[1],
-                "value_as_number": source_bt[self.bt],
-                "value_as_concept_id": self.no_matching_concept[0],
-                "value_as_concept_id_name": self.no_matching_concept[1],
-                "unit_concept_id": measurement_concept[self.bt][2],
-                "unit_concept_id_name": measurement_concept[self.bt][3],
-                "range_low": None,
-                "range_high": None,
-                "provider_id": None,
-                "처방의명": None,
-                "visit_occurrence_id": source_bt["visit_occurrence_id"],
-                "visit_detail_id": source_bt["visit_detail_id"],
-                "measurement_source_value": measurement_concept[self.bt][1],
-                "measurement_source_value_name": measurement_concept[self.bt][1],
-                "EDI코드": None,
-                "measurement_source_concept_id": measurement_concept[self.bt][0],
-                "unit_source_value": measurement_concept[self.bt][3],
-                "value_source_value": source_bt[self.bt],
-                "vocabulary_id": "SNOMED",
-                "visit_source_key": source_bt["visit_source_key"],
-                "처방코드": None,
-                "처방명": None,
-                "환자구분": source_bt[self.patfg],
-                "진료과": source_bt[self.meddept],
-                "진료과명": source_bt["care_site_name"],
-                "처방일": None,
-                "진료일시": source_bt["진료일시"],
-                "접수일시": None,
-                "실시일시": None,
-                "판독일시": None,
-                "보고일시": None,
-                "처방순번": None,
-                "정상치(상)": None,
-                "정상치(하)": None,
-                # "나이": None,
-                "결과내역": source_bt[self.bt]  
-                })
-            
-            cdm_rr = pd.DataFrame({
-                "measurement_id": source_rr.index + 1,
-                "person_id": source_rr["person_id"],
-                "환자명": source_rr["환자명"],
-                "measurement_concept_id": measurement_concept[self.rr][0],
-                "measurement_date": source_rr[self.measurement_datetime].dt.date,
-                "measurement_datetime": source_rr[self.measurement_datetime],
-                "measurement_time": source_rr[self.measurement_datetime].dt.time, 
-                # "measurement_date_type": None,
-                "measurement_type_concept_id": 44818702,
-                "measurement_type_concept_id_name": source_rr["concept_name"],
-                "operator_concept_id": self.no_matching_concept[0],
-                "operator_concept_id_name": self.no_matching_concept[1],
-                "value_as_number": source_rr[self.rr],
-                "value_as_concept_id": self.no_matching_concept[0],
-                "value_as_concept_id_name": self.no_matching_concept[1],
-                "unit_concept_id": measurement_concept[self.rr][2],
-                "unit_concept_id_name": measurement_concept[self.rr][3],
-                "range_low": None,
-                "range_high": None,
-                "provider_id": None,
-                "처방의명": None,
-                "visit_occurrence_id": source_rr["visit_occurrence_id"],
-                "visit_detail_id": source_rr["visit_detail_id"],
-                "measurement_source_value": measurement_concept[self.rr][1],
-                "measurement_source_value_name": measurement_concept[self.rr][1],
-                "EDI코드": None,
-                "measurement_source_concept_id": measurement_concept[self.rr][0],
-                "unit_source_value": measurement_concept[self.rr][3],
-                "value_source_value": source_rr[self.rr],
-                "vocabulary_id": "SNOMED",
-                "visit_source_key": source_rr["visit_source_key"],
-                "처방코드": None,
-                "처방명": None,
-                "환자구분": source_rr[self.patfg],
-                "진료과": source_rr[self.meddept],
-                "진료과명": source_rr["care_site_name"],
-                "처방일": None,
-                "진료일시": source_rr["진료일시"],
-                "접수일시": None,
-                "실시일시": None,
-                "판독일시": None,
-                "보고일시": None,
-                "처방순번": None,
-                "정상치(상)": None,
-                "정상치(하)": None,
-                # "나이": None,
-                "결과내역": source_rr[self.rr]  
-                })
-            
-            cdm_spo2 = pd.DataFrame({
-                "measurement_id": source_spo2.index + 1,
-                "person_id": source_spo2["person_id"],
-                "환자명": source_spo2["환자명"],
-                "measurement_concept_id": measurement_concept[self.spo2][0],
-                "measurement_date": source_spo2[self.measurement_datetime].dt.date,
-                "measurement_datetime": source_spo2[self.measurement_datetime],
-                "measurement_time": source_spo2[self.measurement_datetime].dt.time, 
-                # "measurement_date_type": None,
-                "measurement_type_concept_id": 44818702,
-                "measurement_type_concept_id_name": source_spo2["concept_name"],
-                "operator_concept_id": self.no_matching_concept[0],
-                "operator_concept_id_name": self.no_matching_concept[1],
-                "value_as_number": source_spo2[self.spo2],
-                "value_as_concept_id": self.no_matching_concept[0],
-                "value_as_concept_id_name": self.no_matching_concept[1],
-                "unit_concept_id": measurement_concept[self.spo2][2],
-                "unit_concept_id_name": measurement_concept[self.spo2][3],
-                "range_low": None,
-                "range_high": None,
-                "provider_id": None,
-                "처방의명": None,
-                "visit_occurrence_id": source_spo2["visit_occurrence_id"],
-                "visit_detail_id": source_spo2["visit_detail_id"],
-                "measurement_source_value": measurement_concept[self.spo2][1],
-                "measurement_source_value_name": measurement_concept[self.spo2][1],
-                "EDI코드": None,
-                "measurement_source_concept_id": measurement_concept[self.spo2][0],
-                "unit_source_value": measurement_concept[self.spo2][3],
-                "value_source_value": source_spo2[self.spo2],
-                "vocabulary_id": "SNOMED",
-                "visit_source_key": source_spo2["visit_source_key"],
-                "처방코드": None,
-                "처방명": None,
-                "환자구분": source_spo2[self.patfg],
-                "진료과": source_spo2[self.meddept],
-                "진료과명": source_spo2["care_site_name"],
-                "처방일": None,
-                "진료일시": source_spo2["진료일시"],
-                "접수일시": None,
-                "실시일시": None,
-                "판독일시": None,
-                "보고일시": None,
-                "처방순번": None,
-                "정상치(상)": None,
-                "정상치(하)": None,
-                # "나이": None,
-                "결과내역": source_spo2[self.spo2]  
-                })
-            
-            logging.debug(f"""CDM별 데이터 row수: 
-                          weight: {len(cdm_weight)},
-                          height: {len(cdm_height)},
-                          bmi: {len(cdm_bmi)},
-                          sbp: {len(cdm_sbp)},
-                          dbp: {len(cdm_dbp)},
-                          pr: {len(cdm_pr)},
-                          rr: {len(cdm_rr)},
-                          bt: {len(cdm_bt)},
-                          spo2: {len(cdm_spo2)}
-                          
-                        """)
-
-            cdm = pd.concat([cdm_weight, cdm_height, cdm_bmi, cdm_sbp, cdm_dbp, cdm_pr, cdm_rr, cdm_bt, cdm_spo2], axis = 0, ignore_index=True)
-
-            logging.debug(f'CDM 데이터 row수: {len(cdm)}')
-            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
-            logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
-
-            return cdm   
-
-        except Exception as e :
-            logging.error(f"{self.table} 테이블 CDM 데이터 변환 중 오류:\n {e}", exc_info = True)
-
-
-class MergeMeasurementTransformer(DataTransformer):
-    def __init__(self, config_path):
-        super().__init__(config_path)
-        self.table = "merge_measurement"
-        self.cdm_config = self.config[self.table]
-
-        self.source_data1 = self.cdm_config["data"]["source_data1"]
-        self.source_data2 = self.cdm_config["data"]["source_data2"]
-        self.output_filename = self.cdm_config["data"]["output_filename"]
-
-    def transform(self):
-        """
-        소스 데이터를 읽어들여 CDM 형식으로 변환하고 결과를 CSV 파일로 저장하는 메소드입니다.
-        """
-        try : 
-            transformed_data = self.process_source()
-
-            # save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
-
-            logging.info(f"{self.table} 테이블 변환 완료")
-            logging.info(f"============================")
-        
-        except Exception as e :
-            logging.error(f"{self.table} 테이블 변환 중 오류:\n {e}", exc_info=True)
-            raise
-
-    def process_source(self):
-        """
-        소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
-        """
-        try :
-            source1 = self.read_csv(self.source_data1, path_type = self.cdm_flag, dtype = self.source_dtype)
-            source2 = self.read_csv(self.source_data2, path_type = self.cdm_flag, dtype = self.source_dtype)
-            
-            logging.debug(f"원천1 데이터 row수 : {len(source1)}, 원천2 데이터 row수 :{len(source2)}, 원천1, 원천2 row수 합: {len(source1) + len(source2)}" )
-
-            # axis = 0을 통해 행으로 데이터 합치기, ignore_index = True를 통해 dataframe index재설정
-            cdm = pd.concat([source1, source2], axis = 0, ignore_index=True)
-
-            cdm["measurement_id"] = cdm.index + 1
-
-            logging.debug(f"CDM 데이터 row수 : {len(cdm)}")
-
-            return cdm
-
-        except Exception as e :
-            logging.error(f"{self.table} 테이블 소스 데이터 처리 중 오류: {e}", exc_info = True)
 
         
 class ProcedureTransformer(DataTransformer):
@@ -2400,20 +1651,11 @@ class ProcedureTransformer(DataTransformer):
         self.meddept = self.cdm_config["columns"]["meddept"]
         self.provider = self.cdm_config["columns"]["provider"]
         self.orddate = self.cdm_config["columns"]["orddate"]
-        self.exectime = self.cdm_config["columns"]["exectime"]
         self.opdate = self.cdm_config["columns"]["opdate"]
+        self.procedure_date = self.cdm_config["columns"]["procedure_date"]
         self.procedure_source_value = self.cdm_config["columns"]["procedure_source_value"]
         self.procedure_source_value_name = self.cdm_config["columns"]["procedure_source_value_name"]
         self.patfg = self.cdm_config["columns"]["patfg"]
-        self.medtime = self.cdm_config["columns"]["medtime"]
-        self.dcyn = self.cdm_config["columns"]["dcyn"]
-        self.ordclstyp = self.cdm_config["columns"]["ordclstyp"]
-        self.ordseqno = self.cdm_config["columns"]["ordseqno"]
-        self.age = self.cdm_config["columns"]["age"]
-
-        self.fromdate = self.cdm_config["columns"]["fromdate"]
-        self.todate = self.cdm_config["columns"]["todate"]
-        self.ordcode = self.cdm_config["columns"]["ordcode"]
     
         
     def transform(self):
@@ -2450,37 +1692,31 @@ class ProcedureTransformer(DataTransformer):
             logging.debug(f"원천 데이터 row수: {len(source)}")
 
             # 원천에서 조건걸기
-            source = source[[self.person_source_value, self.orddate, self.exectime, self.ordseqno, self.opdate, self.procedure_source_value,
-                              self.meddept, self.provider, self.medtime, self.patfg, self.age, self.procedure_source_value_name, self.ordclstyp]]
+            source = source[[self.person_source_value, self.orddate, self.opdate, self.procedure_source_value,
+                              self.meddept, self.provider, self.patfg, self.procedure_source_value_name,
+                              self.hospital, self.source_key, self.procedure_date]]
             # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
+            source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.source_key]
 
             source["처방일"] = source[self.orddate]
             source["수술일"] = source[self.opdate]
-            source["진료일시"] = source[self.medtime]
-            source["실시일시"] = source[self.exectime]
-
-            source[self.orddate] = pd.to_datetime(source[self.orddate], format="%Y%m%d")
-            source[self.exectime] = source[self.exectime].astype(str).apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
-            # source[self.exectime] = pd.to_datetime(source[self.exectime], format="%Y%m%d%H%M%S", errors = "coerce")
-            source[self.exectime] = pd.to_datetime(source[self.exectime], errors = "coerce")
-            source[self.medtime] = source[self.medtime].astype(str).apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
-            source[self.medtime] = pd.to_datetime(source[self.medtime], errors = "coerce")
-            source[self.opdate] = pd.to_datetime(source[self.opdate], format = "%Y%m%d")
-            source = source[(source[self.orddate] <= pd.to_datetime(self.data_range)) & (source[self.ordclstyp] != "D2")]
+            
+            source[self.orddate] = pd.to_datetime(source[self.orddate])
+            source[self.opdate] = pd.to_datetime(source[self.opdate])
+            source[self.procedure_date] = pd.to_datetime(source[self.procedure_date])
+            source = source[(source[self.orddate] <= pd.to_datetime(self.data_range))]
 
             logging.debug(f"조건적용 후 원천 데이터 row수: {len(source)}")
 
             local_edi = local_edi[[self.ordcode, self.fromdate, self.todate, self.edicode, "concept_id"]]
-            local_edi[self.fromdate] = pd.to_datetime(local_edi[self.fromdate] , format="%Y%m%d", errors="coerce")
-            # local_edi[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
-            local_edi[self.todate] = pd.to_datetime(local_edi[self.todate] , format="%Y%m%d", errors="coerce")
-            # local_edi[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
+            local_edi[self.fromdate] = pd.to_datetime(local_edi[self.fromdate], errors="coerce")
+            local_edi[self.todate] = pd.to_datetime(local_edi[self.todate], errors="coerce")
+            
 
             # LOCAL코드와 EDI코드 매핑 테이블과 병합
             source = pd.merge(source, local_edi, left_on=self.procedure_source_value, right_on=self.ordcode, how="left")
-            source[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
-            source[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
+            source[self.fromdate] = source[self.fromdate].fillna(pd.to_datetime('1900-01-01'))
+            source[self.todate] = source[self.todate].fillna(pd.to_datetime('2099-12-31'))
             logging.debug(f'local_edi 테이블과 결합 후 데이터 row수: {len(source)}')
             source = source[(source[self.orddate] >= source[self.fromdate]) & (source[self.orddate] <= source[self.todate])]
             logging.debug(f"local_edi 사용기간별 필터 적용 후 데이터 row수: {len(source)}")
@@ -2491,31 +1727,25 @@ class ProcedureTransformer(DataTransformer):
             logging.debug(f'person 테이블과 결합 후 데이터 row수, {len(source)}')
 
             # care_site table과 병합
-            source = pd.merge(source, care_site_data, left_on=self.meddept, right_on="care_site_source_value", how="left")
+            source = pd.merge(source, care_site_data, left_on=[self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")
             logging.debug(f'care_site 테이블과 결합 후 데이터 row수, {len(source)}')
 
             # provider table과 병합
-            source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
+            source = pd.merge(source, provider_data, left_on=[self.provider, self.hospital], right_on=["provider_source_value", self.hospital], how="left", suffixes=('', '_y'))
             logging.debug(f'provider 테이블과 결합 후 데이터 row수, {len(source)}')
 
             # visit_start_datetime 형태 변경
+            visit_data = visit_data[["visit_occurrence_id", "visit_start_datetime", "visit_source_key"]]
             visit_data["visit_start_datetime"] = pd.to_datetime(visit_data["visit_start_datetime"])
 
             # visit_occurrence table과 병합
-            source = pd.merge(source, visit_data, left_on=["person_id", "care_site_id", self.visit_source_key], right_on=["person_id", "visit_source_key"], how="left", suffixes=('', '_y'))
+            source = pd.merge(source, visit_data, left_on=["visit_source_key"], right_on=["visit_source_key"], how="left", suffixes=('', '_y'))
             logging.debug(f'visit_occurrence 테이블과 결합 후 데이터 row수, {len(source)}')
 
             # visit_detail table과 병합
-            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
-            visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
-            visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
-            source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
+            visit_detail = visit_detail[["visit_detail_id", "visit_detail_source_key"]]
+            source = pd.merge(source, visit_detail, left_on=["visit_source_key"], right_on=["visit_detail_source_key"], how="left", suffixes=('', '_y'))
             logging.debug(f"visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}")
-            
-            source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.orddate] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
-            source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
-            source = source.drop_duplicates(subset=["person_id", self.orddate, self.patfg, self.procedure_source_value, self.medtime, self.ordseqno, self.meddept])
-            logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}")
 
             ### concept_etc테이블과 병합 ###
             concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)            
@@ -2544,15 +1774,17 @@ class ProcedureTransformer(DataTransformer):
         변환된 데이터는 새로운 DataFrame으로 구성됩니다.
         """
         try : 
-            procedure_date_condition = [source[self.opdate].notna()
-                                        , source[self.exectime].notna()
+            procedure_date_condition = [ source[self.procedure_date].notna()
+                                        , source[self.opdate].notna()
+                                        , source[self.orddate].notna()
                                         ]
-            procedure_date_value = [source[self.opdate].dt.date
-                                    , source[self.exectime].dt.date
+            procedure_date_value = [ source[self.procedure_date].dt.date
+                                    , source[self.opdate].dt.date
+                                    , source[self.orddate].dt.date
                                     ]
-            procedure_datetime_value = [
-                                    source[self.opdate]
-                                    , source[self.exectime]
+            procedure_datetime_value = [ source[self.procedure_date]
+                                    , source[self.opdate]
+                                    , source[self.orddate]
                                     ]
                                     
             cdm = pd.DataFrame({
@@ -2562,7 +1794,7 @@ class ProcedureTransformer(DataTransformer):
                 "procedure_concept_id": np.select([source["concept_id"].notna()], [source["concept_id"]], default=self.no_matching_concept[0]), 
                 "procedure_date": np.select(procedure_date_condition, procedure_date_value, default = source[self.orddate].dt.date),
                 "procedure_datetime": np.select(procedure_date_condition, procedure_datetime_value, default = source[self.orddate]),
-                "procedure_date_type": np.select(procedure_date_condition, ["수술일", "실시일"], default = "처방일"),
+                "procedure_date_type": np.select(procedure_date_condition, [self.procedure_date, self.opdate, self.orddate], default = self.orddate),
                 "procedure_type_concept_id": np.select([source["procedure_type_concept_id"].notna()], [source["procedure_type_concept_id"]], default=self.no_matching_concept[0]),
                 "procedure_type_concept_id_name": np.select([source["concept_name"].notna()], [source["concept_name"]], default=self.no_matching_concept[1]),
                 "modifier_concept_id": None,
@@ -2583,12 +1815,12 @@ class ProcedureTransformer(DataTransformer):
                 "환자구분": source[self.patfg],
                 "진료과": source[self.meddept],
                 "진료과명": source["care_site_name"],
-                "나이": source[self.age],
+                "나이": None,
                 "처방일": source["처방일"],
                 "수술일": source["수술일"],
-                "진료일시": source["진료일시"],
+                "진료일시": None,
                 "접수일시": None,
-                "실시일시": source["실시일시"],
+                "실시일시": source[self.procedure_date],
                 "판독일시": None,
                 "보고일시": None,
                 "결과내역": None, 
@@ -2607,288 +1839,6 @@ class ProcedureTransformer(DataTransformer):
 
         except Exception as e :
             logging.error(f"{self.table} 테이블 CDM 데이터 변환 중 오류:\n {e}", exc_info = True)
-          
-class ProcedureStexmrstTransformer(DataTransformer):
-    def __init__(self, config_path):
-        super().__init__(config_path)
-        self.table = "procedure_stexmrst"
-        self.cdm_config = self.config[self.table]
-
-        self.source_data = self.cdm_config["data"]["source_data"]
-        self.output_filename = self.cdm_config["data"]["output_filename"]
-        self.meddept = self.cdm_config["columns"]["meddept"]
-        self.provider = self.cdm_config["columns"]["provider"]
-        self.orddate = self.cdm_config["columns"]["orddate"]
-        self.exectime = self.cdm_config["columns"]["exectime"]
-        self.procedure_source_value = self.cdm_config["columns"]["procedure_source_value"]
-        self.value_source_value = self.cdm_config["columns"]["value_source_value"]
-        self.unit_source_value = self.cdm_config["columns"]["unit_source_value"]
-        self.range_low = self.cdm_config["columns"]["range_low"]
-        self.range_high = self.cdm_config["columns"]["range_high"]
-        self.patfg = self.cdm_config["columns"]["patfg"]
-        self.medtime = self.cdm_config["columns"]["medtime"]
-        self.ordseqno = self.cdm_config["columns"]["ordseqno"]
-        self.age = self.cdm_config["columns"]["age"]
-        self.rslttext = self.cdm_config["columns"]["rslttext"]
-        self.conclusion = self.cdm_config["columns"]["conclusion"]
-        self.ordcode = self.cdm_config["columns"]["ordcode"]
-        self.ordname = self.cdm_config["columns"]["ordname"]
-        self.acptdt = self.cdm_config["columns"]["acptdt"]
-        self.readdt = self.cdm_config["columns"]["readdt"]
-        self.reptdt = self.cdm_config["columns"]["reptdt"]
-
-        self.fromdate = self.cdm_config["columns"]["fromdate"]
-        self.todate = self.cdm_config["columns"]["todate"]
-        self.ordcode = self.cdm_config["columns"]["ordcode"]
-        self.ordname = self.cdm_config["columns"]["ordname"]
-
-        
-    def transform(self):
-        """
-        소스 데이터를 읽어들여 CDM 형식으로 변환하고 결과를 CSV 파일로 저장하는 메소드입니다.
-        """
-        try:
-            source_data = self.process_source()
-            transformed_data = self.transform_cdm(source_data)
-
-            # save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
-
-            logging.info(f"{self.table} 테이블 변환 완료")
-            logging.info(f"============================")
-
-        except Exception as e :
-            logging.error(f"{self.table} 테이블 변환 중 오류:\n {e}", exc_info=True)
-            raise
-
-    def process_source(self):
-        """
-        소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
-        """
-        try:
-            source = self.read_csv(self.source_data, path_type = self.source_flag, dtype = self.source_dtype)
-            local_edi = self.read_csv(self.local_edi_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            person_data = self.read_csv(self.person_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            provider_data = self.read_csv(self.provider_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            care_site_data = self.read_csv(self.care_site_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            visit_data = self.read_csv(self.visit_data, path_type = self.cdm_flag, dtype = self.source_dtype)
-            visit_detail = self.read_csv(self.visit_detail, path_type = self.cdm_flag, dtype = self.source_dtype)
-            concept_etc = self.read_csv(self.concept_etc, path_type = self.source_flag, dtype = self.source_dtype)
-            logging.debug(f'원천 데이터 row수: {len(source)}')
-
-            # 원천에서 조건걸기
-            source = source[[self.person_source_value, self.orddate, self.exectime, self.ordseqno,
-                                self.meddept, self.provider, self.patfg, self.medtime, self.age,
-                                self.rslttext, self.conclusion, self.ordcode, self.ordname, self.procedure_source_value,
-                                self.value_source_value, self.range_high, self.range_low, self.unit_source_value, self.acptdt, self.readdt, self.reptdt]]
-            # visit_source_key 생성
-            source["visit_source_key"] = source[self.person_source_value] + source[self.medtime].astype(str) + source[self.patfg] + source[self.meddept]
-            source["처방일"] = source[self.orddate]
-            source["진료일시"] = source[self.medtime]
-            source["실시일시"] = source[self.exectime]
-            
-            source[self.orddate] = pd.to_datetime(source[self.orddate])
-            source = source[(source[self.orddate] <= pd.to_datetime(self.data_range)) & (~source[self.procedure_source_value].str[:1].isin(["L", "P"])) ]
-            source[self.exectime] = source[self.exectime].astype(str).apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
-            source[self.exectime] = pd.to_datetime(source[self.exectime], errors = "coerce")
-            source[self.medtime] = source[self.medtime].astype(str).apply(lambda x : x[:4] + "-" + x[4:6] + "-" + x[6:8] + " " + x[8:10] + ":" + x[10:])
-            source[self.medtime] = pd.to_datetime(source[self.medtime], errors = "coerce")
-            
-            # value_as_number float형태로 저장되게 값 변경
-            source[self.value_source_value] = source[self.value_source_value].str.extract('(\d+\.\d+|\d+)')
-            source[self.value_source_value].astype(float)
-            logging.debug(f'조건 적용후 원천 데이터 row수: {len(source)}')
-
-
-            # local_edi 전처리
-            local_edi = local_edi[[self.ordcode, self.fromdate, self.todate, self.edicode, "concept_id", self.ordname]]
-            local_edi[self.fromdate] = pd.to_datetime(local_edi[self.fromdate] , format="%Y%m%d", errors="coerce")
-            # local_edi[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
-            local_edi[self.todate] = pd.to_datetime(local_edi[self.todate] , format="%Y%m%d", errors="coerce")
-            # local_edi[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
-
-            # LOCAL코드와 EDI코드 매핑 테이블과 병합
-            source = pd.merge(source, local_edi, left_on=self.procedure_source_value, right_on="ORDCODE", how="left", suffixes=["", "_local_edi"])
-            source[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
-            source[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
-            logging.debug(f'local_edi 테이블과 결합 후 데이터 row수: {len(source)}')
-            source = source[(source[self.orddate] >= source[self.fromdate]) & (source[self.orddate] <= source[self.todate])]
-            logging.debug(f"EDI코드 사용기간별 필터 적용 후 데이터 row수: {len(source)}")
-
-            # 데이터 컬럼 줄이기
-            person_data = person_data[["person_id", "person_source_value", "환자명"]]
-            care_site_data = care_site_data[["care_site_id", "care_site_source_value", "care_site_name"]]
-            provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
-            visit_data = visit_data[["visit_occurrence_id", "visit_start_datetime", "care_site_id", "visit_source_value", "person_id"]]
-            visit_detail = visit_detail[["visit_detail_id", "visit_occurrence_id", "visit_detail_start_datetime", "visit_detail_end_datetime"]]
-
-            # person table과 병합
-            source = pd.merge(source, person_data, left_on=self.person_source_value, right_on="person_source_value", how="inner")
-            logging.debug(f'person 테이블과 결합 후 데이터 row수: {len(source)}')
-
-            # care_site table과 병합
-            source = pd.merge(source, care_site_data, left_on=self.meddept, right_on="care_site_source_value", how="left")
-            logging.debug(f'care_site 테이블과 결합 후 데이터 row수: {len(source)}')
-
-            # provider table과 병합
-            source = pd.merge(source, provider_data, left_on=self.provider, right_on="provider_source_value", how="left", suffixes=('', '_y'))
-            logging.debug(f'provider 테이블과 결합 후 데이터 row수: {len(source)}')
-
-            # visit_start_datetime 형태 변경
-            visit_data["visit_start_datetime"] = pd.to_datetime(visit_data["visit_start_datetime"])
-
-            # visit_occurrence table과 병합
-            source = pd.merge(source, visit_data, left_on=["person_id", "care_site_id", self.patfg, self.medtime], right_on=["person_id", "care_site_id", "visit_source_value", "visit_start_datetime"], how="left", suffixes=('', '_y'))
-            logging.debug(f'visit_occurrence 테이블과 결합 후 데이터 row수: {len(source)}')
-
-            # visit_detail table과 병합
-            visit_detail = visit_detail[["visit_detail_id", "visit_detail_start_datetime", "visit_detail_end_datetime", "visit_occurrence_id"]]
-            visit_detail["visit_detail_start_datetime"] = pd.to_datetime(visit_detail["visit_detail_start_datetime"])
-            visit_detail["visit_detail_end_datetime"] = pd.to_datetime(visit_detail["visit_detail_end_datetime"])
-            source = pd.merge(source, visit_detail, left_on=["visit_occurrence_id"], right_on=["visit_occurrence_id"], how="left", suffixes=('', '_y'))
-            logging.debug(f"visit_detail 테이블과 결합 후 원천 데이터 row수: {len(source)}")
-            
-            source["visit_detail_id"] = source.apply(lambda row: row['visit_detail_id'] if pd.notna(row['visit_detail_start_datetime']) and row['visit_detail_start_datetime'] <= row[self.orddate] <= row['visit_detail_end_datetime'] else pd.NA, axis=1)
-            source = source.drop(columns = ["visit_detail_start_datetime", "visit_detail_end_datetime"])
-            source = source.drop_duplicates(subset=["person_id", self.orddate, self.patfg, self.procedure_source_value, self.medtime, self.ordseqno, self.meddept])
-            logging.debug(f"visit_detail 테이블과 결합 후 조건 적용 후 원천 데이터 row수: {len(source)}")
-            
-            ### concept_etc테이블과 병합 ###
-            concept_etc["concept_id"] = concept_etc["concept_id"].astype(int)            
-
-            # type_concept_id 만들고 type_concept_id_name 기반 만들기
-            source["procedure_type_concept_id"] = 38000275
-            source = pd.merge(source, concept_etc, left_on = "procedure_type_concept_id", right_on="concept_id", how="left", suffixes=('', '_procedure_type'))
-            logging.debug(f'concept_etc: type_concept_id 테이블과 결합 후 데이터 row수: {len(source)}')
-
-            source = source.drop_duplicates()
-            logging.debug(f"중복제거 후 데이터 row수: {len(source)}")
-            
-            # 값이 없는 경우 0으로 값 입력
-            # source.loc[source["care_site_id"].isna(), "care_site_id"] = 0
-            source.loc[source["concept_id"].isna(), "concept_id"] = 0
-            logging.debug(f'CDM 테이블과 결합 후 데이터 row수: {len(source)}')
-
-            return source
-
-        except Exception as e :
-            logging.error(f"{self.table} 테이블 소스 데이터 처리 중 오류: {e}", exc_info = True)
-
-    def transform_cdm(self, source):
-        """
-        주어진 소스 데이터를 CDM 형식에 맞게 변환하는 메소드.
-        변환된 데이터는 새로운 DataFrame으로 구성됩니다.
-        """
-        try : 
-            procedure_date_condition = [source[self.exectime].notna()]
-            procedure_date_value = [source[self.exectime]]
-            procedure_datetime_value = [source[self.exectime]]
-
-
-            cdm = pd.DataFrame({
-                "procedure_occurrence_id": source.index + 1,
-                "person_id": source["person_id"],
-                "환자명": source["환자명"],
-                "procedure_concept_id": source["concept_id"],
-                "procedure_date": np.select(procedure_date_condition, procedure_date_value, default = source[self.orddate]),
-                "procedure_datetime": np.select(procedure_date_condition, procedure_datetime_value, default = source[self.orddate]),
-                "procedure_date_type": np.select(procedure_date_condition, ["실시일"], default = "처방일"),
-                "procedure_type_concept_id": np.select([source["procedure_type_concept_id"].notna()], [source["procedure_type_concept_id"]], default=self.no_matching_concept[0]),
-                "procedure_type_concept_id_name": np.select([source["concept_name"].notna()], [source["concept_name"]], default=self.no_matching_concept[1]),
-                "modifier_concept_id": None,
-                "quantity": None,
-                "provider_id": source["provider_id"],
-                "처방의명": source["provider_name"],
-                "visit_occurrence_id": source["visit_occurrence_id"],
-                "visit_detail_id": source["visit_detail_id"],
-                "procedure_source_value": source[self.procedure_source_value],
-                "procedure_source_value_name": source[self.ordname+"_local_edi"],
-                "EDI코드": source[self.ordcode],
-                "procedure_source_concept_id": source["concept_id"],
-                "modifier_source_value": None,
-                "vocabulary_id": "EDI",
-                "visit_source_key": source["visit_source_key"],
-                "처방코드": source[self.ordcode],
-                "처방명": source[self.ordname],
-                "환자구분": source[self.patfg],
-                "진료과": source[self.meddept],
-                "진료과명": source["care_site_name"],
-                "나이": source[self.age],
-                "처방일": source["처방일"],
-                "수술일": None,
-                "진료일시": source["진료일시"],
-                "접수일시": source[self.acptdt],
-                "실시일시": source["실시일시"],
-                "판독일시": source[self.readdt],
-                "보고일시": source[self.reptdt],
-                "결과내역": source[self.rslttext],
-                "결론 및 진단": source[self.conclusion],
-                "결과단위": source[self.unit_source_value]
-                })
-
-            cdm["procedure_date"] = pd.to_datetime(cdm["procedure_date"]).dt.date
-            cdm["procedure_datetime"] = pd.to_datetime(cdm["procedure_datetime"])
-
-            logging.debug(f'CDM 데이터 row수: {len(cdm)}')
-            logging.debug(f"요약:\n{cdm.describe(include = 'all').T.to_string()}")
-            logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
-
-            return cdm   
-
-        except Exception as e :
-            logging.error(f"{self.table} 테이블 CDM 데이터 변환 중 오류:\n {e}", exc_info = True)
-
-
-class MergeProcedureTransformer(DataTransformer):
-    def __init__(self, config_path):
-        super().__init__(config_path)
-        self.table = "merge_procedure"
-        self.cdm_config = self.config[self.table]
-
-        self.source_data1 = self.cdm_config["data"]["source_data1"]
-        self.source_data2 = self.cdm_config["data"]["source_data2"]
-        self.output_filename = self.cdm_config["data"]["output_filename"]
-    
-    def transform(self):
-        """
-        소스 데이터를 읽어들여 CDM 형식으로 변환하고 결과를 CSV 파일로 저장하는 메소드입니다.
-        """
-        try:
-            transformed_data = self.process_source()
-
-            # save_path = os.path.join(self.cdm_path, self.output_filename)
-            self.write_csv(transformed_data, self.cdm_path, self.output_filename)
-
-            logging.info(f"{self.table} 테이블 변환 완료")
-            logging.info(f"============================")
-
-        except Exception as e :
-            logging.error(f"{self.table} 테이블 변환 중 오류:\n {e}", exc_info=True)
-            raise
-
-    def process_source(self):
-        """
-        소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
-        """
-        try:
-            source1 = self.read_csv(self.source_data1, path_type = self.cdm_flag, dtype = self.source_dtype)
-            source2 = self.read_csv(self.source_data2, path_type = self.cdm_flag, dtype = self.source_dtype)
-            logging.debug(f'원천 데이터 row수: 원천1: {len(source1)}, 원천2: {len(source2)}, 원천1 + 원천2: {len(source1) + len(source2)}')
-
-            # axis = 0을 통해 행으로 데이터 합치기, ignore_index = True를 통해 dataframe index재설정
-            cdm = pd.concat([source1, source2], axis = 0, ignore_index=True)
-
-            cdm["procedure_occurrence_id"] = cdm.index + 1
-
-            logging.debug(f'CDM 데이터 row수: {len(cdm)}')
-            logging.debug(f"요약:\n{cdm.describe(include = 'O').T.to_string()}")
-            logging.debug(f"요약:\n{cdm.describe().T.to_string()}")
-            logging.debug(f"컬럼별 null 개수:\n{cdm.isnull().sum().to_string()}")
-
-            return cdm
-
-        except Exception as e :
-            logging.error(f"{self.table} 테이블 소스 데이터 처리 중 오류: {e}", exc_info = True)     
 
         
 class ObservationPeriodTransformer(DataTransformer):
