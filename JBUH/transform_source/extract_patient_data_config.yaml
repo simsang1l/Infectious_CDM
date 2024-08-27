@@ -1,0 +1,7 @@
+input_path: F:/01.감염병데이터베이스/data/2024_infectious_CDM_folder/A9380
+output_path: "F:/01.감염병데이터베이스/data/2024_infectious_CDM_folder/A9380_명단기준"
+input_encoding: utf-8-sig
+output_encoding: utf-8-sig
+patient_filename: "전북대학교병원 명단.xlsx"
+table_list: ["person", "visit_occurrence", "visit_detail", "condition_occurrence", "drug_exposure",
+               "measurement", "procedure_occurrence", "observation_period"]
