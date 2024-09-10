@@ -1574,7 +1574,7 @@ class MeasurementDiagTransformer(DataTransformer):
             source3[self.orddate] = pd.to_datetime(source3[self.orddate])
             source3 = source3[(source3[self.orddate] <= self.data_range)]
 
-            source4 = source4[[self.hospital, "BCNO", "TCLSCD", self.spccd, "RSLTFLAG", self.measurement_source_value, self.measurement_date, self.range_low, self.range_high, self.value_source_value, "RSLTSTAT", "SPCACPTDT", self.frstrgstdt]]
+            source4 = source4[[self.hospital, "BCNO", "TCLSCD", self.spccd, "RSLTFLAG", self.measurement_source_value, self.measurement_date, self.range_low, self.range_high, self.value_source_value, "RSLTSTAT", "LASTREPTDT", self.frstrgstdt]]
             source4 = source4[(source4["RSLTFLAG"] == "O") & (source4["RSLTSTAT"].isin(["4", "5"]))]
 
             logging.debug(f'조건적용 후 원천 데이터 row수: {len(source1)}, {len(source2)}, {len(source3)}, {len(source4)}')
@@ -1595,9 +1595,9 @@ class MeasurementDiagTransformer(DataTransformer):
             # visit_source_key 생성
             source["진료일시"] = source[self.orddd]
             source["처방일"] = source[self.orddate]
-            source["보고일시"] = source[self.measurement_date]
+            source["보고일시"] = source["LASTREPTDT"]
             source["실시일시"] = source["EXECDD"] + source["EXECTM"]
-            source["접수일시"] = source["SPCACPTDT"]
+            source["접수일시"] = source[self.measurement_date]
 
             source[self.orddd] = pd.to_datetime(source[self.orddd])
             source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.orddd].dt.strftime("%Y%m%d") + ';' + source[self.visit_no] + ';' + source[self.hospital]
@@ -1908,12 +1908,12 @@ class MeasurementpthTransformer(DataTransformer):
             logging.debug(f'원천 데이터 row수: {len(source1)}, {len(source2)}, {len(source3)}, {len(source4)}')
 
             # 원천에서 조건걸기
-            source1 = source1[[self.hospital, self.person_source_value, "PTNO", "RSLTRGSTDD", "RSLTRGSTNO", "RSLTRGSTHISTNO", "DELFLAGCD", "HISTNO"]]
+            source1 = source1[[self.hospital, self.person_source_value, "PTNO", "RSLTRGSTDD", "RSLTRGSTNO", "RSLTRGSTHISTNO", "RSLTRGSTTM", "DELFLAGCD", "HISTNO", "GROSTESTRECDD", "GROSTESTRECTM"]]
             source1 = source1[(source1["RSLTRGSTHISTNO"] == "1") & (source1["DELFLAGCD"] == "0") & (source1["HISTNO"] == "1") ]
             
             source2 = source2[[self.hospital, self.person_source_value, "PTNO", "RSLTRGSTDD", "RSLTRGSTNO", "RSLTRGSTHISTNO", self.value_source_value]]
 
-            source3 = source3[[self.hospital, "PTNO", "PRCPDD", "PRCPNO", "ACPTSTATCD", self.measurement_source_value, "SPCCD", "SPCACPTDD", "READDD", "READTM", "ACPTDD", "ACPTTM"]]
+            source3 = source3[[self.hospital, "PTNO", "PRCPDD", "PRCPNO", "ACPTSTATCD", self.measurement_source_value, "SPCCD", "READDD", "READTM", "ACPTDD", "ACPTTM"]]
             source3[self.orddate] = pd.to_datetime(source3[self.orddate])
             source3 = source3[(source3[self.orddate] <= self.data_range)]
             source3 = source3[source3["ACPTSTATCD"].isin(["3", "4"])]
@@ -1939,12 +1939,13 @@ class MeasurementpthTransformer(DataTransformer):
             del source4
 
             # visit_source_key 생성
+            source[self.measurement_date] = source["ACPTDD"] + source["ACPTTM"]
             source["처방일"] = source[self.orddate]
             source["진료일시"] = source[self.orddd]
-            source["접수일시"] = source["SPCACPTDD"]
-            source["실시일시"] = source["ACPTDD"] + source["ACPTTM"]
+            source["접수일시"] = source["ACPTDD"] + source["ACPTTM"]
+            source["실시일시"] = source["GROSTESTRECDD"] + source["GROSTESTRECTM"]
             source["판독일시"] = source["READDD"] + source["READTM"]
-            source["보고일시"] = source[self.measurement_date]
+            source["보고일시"] = source["RSLTRGSTDD"] + source["RSLTRGSTTM"]
 
             source[self.orddd] = pd.to_datetime(source[self.orddd])
             source["visit_source_key"] = source[self.person_source_value] + ';' + source[self.orddd].dt.strftime("%Y%m%d") + ';' + source[self.visit_no] + ';' + source[self.hospital]
@@ -1973,13 +1974,11 @@ class MeasurementpthTransformer(DataTransformer):
             source = source[(source[self.orddate] >= source[self.fromdate]) & (source[self.orddate] <= source[self.todate])]
             del local_edi
             logging.debug(f'EDI코드 테이블과 병합 후 데이터 row수:, {len(source)}')
-            logging.debug(source.columns)
             
             # 데이터 컬럼 줄이기
             care_site_data = care_site_data[["care_site_id", "care_site_source_value", "place_of_service_source_value", "care_site_name", self.care_site_fromdate, self.care_site_todate]]
             provider_data = provider_data[["provider_id", "provider_source_value", "provider_name"]]
             visit_data = visit_data[["visit_occurrence_id", "visit_start_date", "care_site_id", "visit_source_value", "person_id", "visit_source_key"]]
-
 
             # care_site table과 병합
             source = pd.merge(source, care_site_data, left_on=[self.meddept, self.hospital], right_on=["care_site_source_value", "place_of_service_source_value"], how="left")

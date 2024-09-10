@@ -239,7 +239,7 @@ measurement_diag:
     meddept: "ORDDEPTCD"
     provider: "ORDDRID"
     orddate: "PRCPDD"
-    measurement_date: "LASTREPTDT"
+    measurement_date: "SPCACPTDT"
     measurement_source_value: "TESTCD"
     value_source_value: "INPTRSLT"
     unit_source_value: "TESTRSLTUNIT"
@@ -260,7 +260,7 @@ measurement_pth:
     meddept: "ORDDEPTCD"
     provider: "ORDDRID"
     orddate: "PRCPDD"
-    measurement_date: "RSLTRGSTDD"
+    measurement_date: "measurement_date"
     measurement_source_value: "TESTCD"
     value_source_value: "RSLTCNTS1"
     range_low: null
