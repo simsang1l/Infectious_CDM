@@ -1186,6 +1186,8 @@ class LocalEDITransformer(DataTransformer):
     def process_source(self):
         """
         소스 데이터를 로드하고 전처리 작업을 수행하는 메소드입니다.
+        EDI코드가 있는 테이블의 fromdate, todate를 우선 사용하고
+        없는경우 19000101, 20991231를 사용한다.
         """
         try : 
             order_data = self.read_csv(self.order_data, path_type = self.source_flag, dtype = self.source_dtype)
@@ -1195,14 +1197,12 @@ class LocalEDITransformer(DataTransformer):
             logging.debug(f'원천 데이터 row수: order: {len(order_data)}, edi: {len(edi_data)}')
 
             # 처방코드 마스터와 수가코드 매핑
-            source = pd.merge(order_data, edi_data, left_on=self.ordercode, right_on=self.sugacode, how="left")
+            source = pd.merge(order_data, edi_data, left_on=self.ordercode, right_on=self.sugacode, how="left", suffixes=("_order", "_edi"))
             logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
 
-            # null값에 fromdate, todate 설정
-            source[self.fromdate+"_x"].fillna("19000101")
-            source[self.todate+"_x"].fillna("20991231")
-            source[self.fromdate] = source[self.fromdate+"_y"].where(source[self.fromdate+"_y"].notna(), source[self.fromdate+"_x"])
-            source[self.todate] = source[self.todate+"_y"].where(source[self.todate+"_y"].notna(), source[self.todate+"_x"])
+            # fromdate, todate 설정
+            source[self.fromdate] = source[self.fromdate+"_edi"].where(source[self.fromdate+"_edi"].notna(), '19000101')
+            source[self.todate] = source[self.todate+"_edi"].where(source[self.todate+"_edi"].notna(), '20991231')
 
             concept_data = concept_data.sort_values(by = ["vocabulary_id"], ascending=[False])
             concept_data['Sequence'] = concept_data.groupby(["concept_code"]).cumcount() + 1
@@ -1219,12 +1219,13 @@ class LocalEDITransformer(DataTransformer):
             logging.debug(f'중복되는 concept_id 제거 후 데이터 row수: {len(source)}')
 
             local_edi = source[[self.ordercode, self.fromdate, self.todate, self.edicode,
-                                 self.ordname+"_x", self.ordname+"_y",   "concept_id", "concept_name", 
+                                 self.ordname+"_order", self.ordname+"_edi", self.fromdate+"_order", self.todate+"_order",
+                                 self.fromdate+"_edi", self.todate+"_edi", "concept_id", "concept_name", 
                                  "domain_id", "vocabulary_id", "concept_class_id", "standard_concept", 
                                  "concept_code", "valid_start_date", "valid_end_date", "invalid_reason"]]
             local_edi = local_edi.copy()
-            local_edi.loc[:, self.ordname] = local_edi[self.ordname+"_x"]
-            local_edi.loc[:, "SUGANAME"] = local_edi[self.ordname+"_y"].values
+            local_edi.loc[:, self.ordname] = local_edi[self.ordname+"_order"]
+            local_edi.loc[:, "SUGANAME"] = local_edi[self.ordname+"_edi"].values
             logging.debug(f'EDI매핑 후 데이터 row수: {len(source)}')
 
             # ATC코드 매핑
