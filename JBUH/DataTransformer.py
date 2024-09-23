@@ -1197,12 +1197,12 @@ class LocalEDITransformer(DataTransformer):
             logging.debug(f'원천 데이터 row수: order: {len(order_data)}, edi: {len(edi_data)}')
 
             # 처방코드 마스터와 수가코드 매핑
-            source = pd.merge(order_data, edi_data, left_on=self.ordercode, right_on=self.sugacode, how="left", suffixes=("_order", "_edi"))
+            source = pd.merge(order_data, edi_data, left_on=self.ordercode, right_on=self.sugacode, how="left", suffixes=("_ORDER", "_EDI"))
             logging.debug(f'처방코드, 수가코드와 결합 후 데이터 row수: {len(source)}')
 
             # fromdate, todate 설정
-            source[self.fromdate] = source[self.fromdate+"_edi"].where(source[self.fromdate+"_edi"].notna(), '19000101')
-            source[self.todate] = source[self.todate+"_edi"].where(source[self.todate+"_edi"].notna(), '20991231')
+            source[self.fromdate] = source[self.fromdate+"_EDI"].where(source[self.fromdate+"_EDI"].notna(), '19000101')
+            source[self.todate] = source[self.todate+"_EDI"].where(source[self.todate+"_EDI"].notna(), '20991231')
 
             concept_data = concept_data.sort_values(by = ["vocabulary_id"], ascending=[False])
             concept_data['Sequence'] = concept_data.groupby(["concept_code"]).cumcount() + 1
@@ -1219,13 +1219,13 @@ class LocalEDITransformer(DataTransformer):
             logging.debug(f'중복되는 concept_id 제거 후 데이터 row수: {len(source)}')
 
             local_edi = source[[self.ordercode, self.fromdate, self.todate, self.edicode,
-                                 self.ordname+"_order", self.ordname+"_edi", self.fromdate+"_order", self.todate+"_order",
-                                 self.fromdate+"_edi", self.todate+"_edi", "concept_id", "concept_name", 
+                                 self.ordname+"_ORDER", self.ordname+"_EDI", self.fromdate+"_ORDER", self.todate+"_ORDER",
+                                 self.fromdate+"_EDI", self.todate+"_EDI", "concept_id", "concept_name", 
                                  "domain_id", "vocabulary_id", "concept_class_id", "standard_concept", 
                                  "concept_code", "valid_start_date", "valid_end_date", "invalid_reason"]]
             local_edi = local_edi.copy()
-            local_edi.loc[:, self.ordname] = local_edi[self.ordname+"_order"]
-            local_edi.loc[:, "SUGANAME"] = local_edi[self.ordname+"_edi"].values
+            local_edi.loc[:, self.ordname] = local_edi[self.ordname+"_ORDER"]
+            local_edi.loc[:, "SUGANAME"] = local_edi[self.ordname+"_EDI"].values
             logging.debug(f'EDI매핑 후 데이터 row수: {len(source)}')
 
             # ATC코드 매핑
@@ -1544,7 +1544,7 @@ class MeasurementStexmrstTransformer(DataTransformer):
             source = source[(source[self.orddate] <= pd.to_datetime(self.data_range)) & (source[self.measurement_source_value].str[:1].isin(["L", "P"])) ]
             logging.debug(f'L, P만 포함된 후 데이터 row수: {len(source)}')
             source = source[~source[self.measurement_source_value].isin(["L9999"])]
-            logging.debug(f'L999제외 후 원천 데이터 row수: {len(source)}')
+            logging.debug(f'L9999제외 후 원천 데이터 row수: {len(source)}')
             
             # 201903081045같은 데이터가 2019-03-08 10:04:05로 바뀌는 문제 발견하여 분리해서 연결 후 datetime형태로 변경
             # NaN값이 있어 float형 NaN으로 읽는 경우가 있어 .astype(str) 추가
@@ -1581,8 +1581,8 @@ class MeasurementStexmrstTransformer(DataTransformer):
             # LOCAL코드와 EDI코드 매핑 테이블과 병합
             source = pd.merge(source, local_edi, left_on=self.measurement_source_value, right_on=self.ordcode, how="left", suffixes=["", "_local_edi"])
             del local_edi
-            source[self.fromdate].fillna(pd.Timestamp('1900-01-01'), inplace = True)
-            source[self.todate].fillna(pd.Timestamp('2099-12-31'), inplace = True)
+            source[self.fromdate] = source[self.fromdate].fillna(pd.Timestamp('1900-01-01'))
+            source[self.todate] = source[self.todate].fillna(pd.Timestamp('2099-12-31'))
             logging.debug(f'EDI코드 테이블과 병합 후 데이터 row수: {len(source)}')
             source = source[(source[self.orddate] >= source[self.fromdate]) & (source[self.orddate] <= source[self.todate])]
             logging.debug(f"EDI코드 사용기간별 필터 적용 후 데이터 row수: {len(source)}")
