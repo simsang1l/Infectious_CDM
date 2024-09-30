@@ -20,7 +20,7 @@ hospital: "병원구분"
 concept_etc: "concept_etc"
 concept_kcd: "concept_kcd7"
 unit_concept_synonym: "unit_concept_synonym"
-diag_condition: "A9380"
+diag_condition: ""
 # ['A9380', 'A753', 'A31']
 no_matching_concept: [0, "No matching concept"]
 
